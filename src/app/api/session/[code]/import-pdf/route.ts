@@ -16,7 +16,12 @@ function safeFileName(name: string): string {
 
 export async function POST(req: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const formData = await req.formData();
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "Invia il PDF come multipart/form-data" }, { status: 400 });
+  }
   const participantId = formData.get("participantId");
   const file = formData.get("file");
 
