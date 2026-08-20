@@ -9,6 +9,7 @@ App interattiva per la fase finale del workshop AI Adoption. Il partecipante car
 3. La route `POST /api/session/[code]/import-pdf` invia temporaneamente il PDF al modello OpenAI, estrae e normalizza i campi della scheda e salva in Redis solo i dati strutturati. Il PDF originale non viene conservato.
 4. Gli Step 1–4 vengono saltati e il partecipante arriva direttamente allo Step 5, in attesa della valutazione dell'AI Board.
 5. Il facilitatore trova il caso importato nel portfolio, assegna Impact, Effort, Risk e Reuse e salva la valutazione. Il partecipante riceve l'esito tramite polling e può esportarlo in PDF.
+6. Il partecipante legge punteggi, criteri e motivazioni, accompagnati da un'indicazione visiva a emoji. Prima di vedere i consigli IA deve inserire una propria considerazione; soltanto dopo il salvataggio l'IA genera suggerimenti che tengono conto del suo punto di vista.
 
 Un nuovo import dello stesso partecipante sostituisce la scheda precedente e invalida l'eventuale valutazione già presente, evitando che i punteggi restino associati al documento sbagliato. Le submission create con il percorso storico restano leggibili e modificabili per compatibilità.
 
@@ -50,6 +51,8 @@ Priority Score = (Impact × 2) + Reuse - Effort - Risk + 7   # intervallo 0–20
 I quadranti usano le soglie **Impact ≥ 4** e **Effort ≤ 2**: Quick Win, Strategic Bet, Fill-in e Money Pit. `Risk = 5` attiva il veto e richiede una valutazione Legal/Compliance prima dell'approvazione. Se il caso influenza decisioni su persone specifiche e `Risk > 3`, viene inoltre richiesta una valutazione etica esplicita.
 
 Configurazione, criteri e soglie vivono in `src/config/priorityFramework.ts`; le funzioni pure di calcolo e classificazione in `src/lib/priorityScoring.ts`. La scrittura passa esclusivamente dalla route autenticata `POST /api/session/[code]/priority`. Lo Step 5 del partecipante legge gli stessi dati e non espone controlli di modifica.
+
+Per ogni dimensione lo Step 5 mostra sia il criterio canonico associato al punteggio sia l'eventuale motivazione specifica dell'AI Board. Le emoji leggono la desiderabilità del dato: valori alti sono positivi per Impact e Reuse, mentre la scala è invertita per Effort e Risk. La considerazione del partecipante viene salvata in Redis tramite `POST /api/session/[code]/priority-reflection`; la stessa route genera poi i consigli strutturati dell'IA. Non esiste quindi un percorso API che produca consigli senza una considerazione valida. Se la valutazione cambia o viene importato un nuovo PDF, considerazione e consigli precedenti vengono invalidati. L'export PDF include criterio, motivazione, considerazione e — quando disponibile — il consiglio successivo.
 
 ## Step 4 — Use Case: intervista e scheda
 
@@ -145,7 +148,8 @@ src/
 │   └── api/                          # route handler (auth, sessione, agente AI)
 │       ├── session/list              # sessioni attive: rientro del facilitatore
 │       ├── session/[code]/resume     # rientro del partecipante con identità salvata
-│       └── session/[code]/import-pdf # estrazione PDF e accesso diretto al Blocco 3
+│       ├── session/[code]/import-pdf # estrazione PDF e accesso diretto al Blocco 3
+│       └── session/[code]/priority-reflection # considerazione obbligatoria e consigli IA
 ├── components/                       # Step1Frizione, Step2Caratteristiche, Step3Esito,
 │                                     # MatriceImpattoProntezza (SVG),
 │                                     # UseCaseStep (Step 4: intervista + scheda),

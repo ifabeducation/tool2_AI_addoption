@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, FileCheck2, FileDown, ShieldAlert } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { AlertTriangle, FileCheck2, FileDown, LoaderCircle, ShieldAlert, Sparkles } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
+import { submitPriorityReflection } from "@/lib/clientApi";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
-import { evaluatePriority } from "@/lib/priorityScoring";
-import { Block2Submission, PriorityDimension, PriorityEvaluation } from "@/lib/types";
+import { evaluatePriority, getPriorityScorePresentation } from "@/lib/priorityScoring";
+import {
+  Block2Submission,
+  PriorityAdvice,
+  PriorityDimension,
+  PriorityEvaluation,
+  PriorityReflection,
+  Submission,
+} from "@/lib/types";
 import { nowMs } from "@/lib/time";
 
 const DIMENSIONS: PriorityDimension[] = ["impact", "effort", "risk", "reuse"];
@@ -40,13 +48,26 @@ export default function Step5Priority({
   code,
   evaluation,
   block2,
+  reflection,
+  advice,
+  participantId,
+  onSubmissionSaved,
 }: {
   participantName: string;
   code: string;
   evaluation?: PriorityEvaluation;
   block2?: Block2Submission;
+  reflection?: PriorityReflection;
+  advice?: PriorityAdvice;
+  participantId: string;
+  onSubmissionSaved: (submission: Submission) => void;
 }) {
   const [exporting, setExporting] = useState(false);
+  const [reflectionText, setReflectionText] = useState(reflection?.text ?? "");
+  const [requestingAdvice, setRequestingAdvice] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   if (!evaluation) {
     return (
       <div className="flex flex-col gap-4">
@@ -62,9 +83,37 @@ export default function Step5Priority({
   async function exportPdf() {
     setExporting(true);
     try {
-      await downloadPriorityPdf({ participantName, code, evaluation: evaluation as PriorityEvaluation, block2, now: nowMs() });
+      await downloadPriorityPdf({
+        participantName,
+        code,
+        evaluation: evaluation as PriorityEvaluation,
+        block2,
+        reflection,
+        advice,
+        now: nowMs(),
+      });
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleReflectionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRequestingAdvice(true);
+    setError(null);
+    setFeedback(null);
+    try {
+      const response = await submitPriorityReflection(code, participantId, reflectionText);
+      onSubmissionSaved(response.submission);
+      setFeedback(
+        response.adviceGenerated
+          ? "Considerazione salvata. I consigli IA sono stati generati tenendone conto."
+          : response.warning ?? "Considerazione salvata."
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Non è stato possibile salvare la considerazione");
+    } finally {
+      setRequestingAdvice(false);
     }
   }
 
@@ -97,14 +146,30 @@ export default function Step5Priority({
           const score = evaluation.scores[dimension];
           const config = PRIORITY_DIMENSIONS[dimension];
           const criterion = config.criteria.find((item) => item.score === score);
+          const presentation = getPriorityScorePresentation(dimension, score);
           return (
             <div key={dimension} className="rounded-xl border border-ifab-border bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-semibold text-ifab-navy">{config.label}</h3>
-                <span className="rounded-full bg-ifab-navy px-2.5 py-1 text-sm font-bold text-white">{score}/5</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-2xl"
+                    role="img"
+                    aria-label={`${presentation.accessibleLabel} per ${config.label}`}
+                    title={presentation.accessibleLabel}
+                  >
+                    {presentation.emoji}
+                  </span>
+                  <span className="rounded-full bg-ifab-navy px-2.5 py-1 text-sm font-bold text-white">{score}/5</span>
+                </div>
               </div>
               <p className="mt-2 text-sm font-medium text-ifab-text">{criterion?.label}</p>
-              <p className="mt-1 text-xs text-ifab-text-muted">{evaluation.rationale?.[dimension] || criterion?.description}</p>
+              <p className="mt-1 text-xs text-ifab-text-muted">{criterion?.description}</p>
+              {evaluation.rationale?.[dimension] && (
+                <p className="mt-3 border-t border-ifab-border pt-3 text-xs text-ifab-text">
+                  <strong>Motivazione AI Board:</strong> {evaluation.rationale[dimension]}
+                </p>
+              )}
             </div>
           );
         })}
@@ -123,12 +188,93 @@ export default function Step5Priority({
         </div>
       )}
 
-      <section className="rounded-xl border border-ifab-border bg-white p-5">
-        <h3 className="text-sm font-semibold text-ifab-navy">Azione raccomandata</h3>
-        <p className="mt-2 text-sm text-ifab-text">{result.action}</p>
-        <p className="mt-2 text-sm text-ifab-text-muted">{result.quadrantStrategy}</p>
-        {evaluation.boardNotes && <p className="mt-4 border-t border-ifab-border pt-4 text-sm text-ifab-text-muted">{evaluation.boardNotes}</p>}
-      </section>
+      {evaluation.boardNotes && (
+        <section className="rounded-xl border border-ifab-border bg-white p-5">
+          <h3 className="text-sm font-semibold text-ifab-navy">Note dell&apos;AI Board</h3>
+          <p className="mt-2 text-sm text-ifab-text">{evaluation.boardNotes}</p>
+        </section>
+      )}
+
+      <form onSubmit={handleReflectionSubmit} className="rounded-xl border border-ifab-blue/30 bg-blue-50/50 p-5">
+        <h3 className="font-semibold text-ifab-navy">Prima i tuoi pensieri</h3>
+        <p className="mt-1 text-sm text-ifab-text-muted">
+          Scrivi cosa condividi, cosa ti sorprende e quali vincoli conosci. I consigli IA restano nascosti finché non invii questa considerazione.
+        </p>
+        <label htmlFor="priority-reflection" className="mt-4 block text-sm font-medium text-ifab-text">
+          Le tue considerazioni
+        </label>
+        <textarea
+          id="priority-reflection"
+          value={reflectionText}
+          onChange={(event) => setReflectionText(event.target.value.slice(0, 3000))}
+          rows={5}
+          minLength={10}
+          maxLength={3000}
+          required
+          disabled={requestingAdvice}
+          placeholder="Per esempio: condivido il punteggio di impatto, ma prima dell'MVP dobbiamo verificare..."
+          className="mt-2 w-full rounded-lg border border-ifab-border bg-white px-3 py-2 text-sm text-ifab-text outline-none transition focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20 disabled:opacity-60"
+        />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-xs text-ifab-text-muted">{reflectionText.length}/3000 caratteri</span>
+          <button
+            type="submit"
+            disabled={requestingAdvice || reflectionText.trim().length < 10}
+            className="flex items-center gap-2 rounded-lg bg-ifab-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-ifab-blue disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {requestingAdvice ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
+            {requestingAdvice
+              ? "Sto preparando i consigli..."
+              : advice
+                ? "Aggiorna e rigenera i consigli"
+                : reflection
+                  ? "Riprova a generare i consigli"
+                  : "Invia e scopri i consigli IA"}
+          </button>
+        </div>
+        {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+        {feedback && <p role="status" className="mt-3 text-sm text-emerald-700">{feedback}</p>}
+      </form>
+
+      {reflection && (
+        <section className="rounded-xl border border-ifab-border bg-white p-5">
+          <h3 className="text-sm font-semibold text-ifab-navy">Indicazione del framework</h3>
+          <p className="mt-2 text-sm text-ifab-text">{result.action}</p>
+          <p className="mt-2 text-sm text-ifab-text-muted">{result.quadrantStrategy}</p>
+        </section>
+      )}
+
+      {advice && reflection ? (
+        <section className="rounded-xl border border-violet-200 bg-violet-50 p-5">
+          <div className="flex items-center gap-2 text-violet-900">
+            <Sparkles size={18} />
+            <h3 className="font-semibold">Consigli dell&apos;IA dopo la tua considerazione</h3>
+          </div>
+          <p className="mt-3 text-sm text-violet-950">{advice.summary}</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {([
+              ["Punti di forza", advice.strengths],
+              ["Attenzioni", advice.cautions],
+              ["Prossimi passi", advice.nextSteps],
+            ] as const).map(([title, items]) => (
+              <div key={title}>
+                <h4 className="text-sm font-semibold text-violet-900">{title}</h4>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-violet-950">
+                  {items.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : reflection ? (
+        <div className="rounded-xl border border-dashed border-violet-300 bg-white p-5 text-sm text-ifab-text-muted">
+          La tua considerazione è salvata. Usa il pulsante qui sopra per generare i consigli IA quando il servizio è disponibile.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-ifab-border bg-white p-5 text-center text-sm text-ifab-text-muted">
+          🔒 I consigli IA saranno disponibili soltanto dopo la tua considerazione.
+        </div>
+      )}
     </div>
   );
 }

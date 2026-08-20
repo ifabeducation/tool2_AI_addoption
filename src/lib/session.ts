@@ -5,7 +5,9 @@ import {
   DEFAULT_UNLOCKED_STEPS,
   Participant,
   ParticipantProgress,
+  PriorityAdvice,
   PriorityEvaluation,
+  PriorityReflection,
   SessionMeta,
   SessionSummary,
   Step1Submission,
@@ -309,6 +311,8 @@ export async function replaceBlock2(
   current.block2 = data;
   // Una nuova scheda deve essere valutata di nuovo dall'AI Board.
   delete current.priority;
+  delete current.priorityReflection;
+  delete current.priorityAdvice;
   await redis.set(keySubmission(code, participantId), current, { ex: SESSION_TTL_SECONDS });
   return current;
 }
@@ -321,7 +325,42 @@ export async function savePriorityEvaluation(
 ): Promise<Submission> {
   const redis = getRedis();
   const current = await getSubmission(code, participantId);
+  const evaluationChanged =
+    JSON.stringify(current.priority?.scores) !== JSON.stringify(data.scores) ||
+    JSON.stringify(current.priority?.rationale) !== JSON.stringify(data.rationale) ||
+    current.priority?.boardNotes !== data.boardNotes;
   current.priority = data;
+  // Se cambia la valutazione, la persona deve riflettere sui nuovi dati prima
+  // che l'IA produca nuovi consigli.
+  if (evaluationChanged) {
+    delete current.priorityReflection;
+    delete current.priorityAdvice;
+  }
+  await redis.set(keySubmission(code, participantId), current, { ex: SESSION_TTL_SECONDS });
+  return current;
+}
+
+export async function savePriorityReflection(
+  code: string,
+  participantId: string,
+  reflection: PriorityReflection
+): Promise<Submission> {
+  const redis = getRedis();
+  const current = await getSubmission(code, participantId);
+  current.priorityReflection = reflection;
+  delete current.priorityAdvice;
+  await redis.set(keySubmission(code, participantId), current, { ex: SESSION_TTL_SECONDS });
+  return current;
+}
+
+export async function savePriorityAdvice(
+  code: string,
+  participantId: string,
+  advice: PriorityAdvice
+): Promise<Submission> {
+  const redis = getRedis();
+  const current = await getSubmission(code, participantId);
+  current.priorityAdvice = advice;
   await redis.set(keySubmission(code, participantId), current, { ex: SESSION_TTL_SECONDS });
   return current;
 }

@@ -124,6 +124,22 @@ export type PriorityEvaluation = {
   evaluatedAt: number;
 };
 
+/** Considerazione personale inserita prima di richiedere i consigli IA. */
+export type PriorityReflection = {
+  text: string;
+  submittedAt: number;
+};
+
+/** Consigli generati solo dopo il salvataggio della considerazione personale. */
+export type PriorityAdvice = {
+  summary: string;
+  strengths: string[];
+  cautions: string[];
+  nextSteps: string[];
+  generatedAt: number;
+  model: string;
+};
+
 export type ParticipantTab = "1" | "2" | "3" | "UC" | "5";
 
 /**
@@ -145,6 +161,8 @@ export type Submission = {
   block2?: Block2Submission;
   // Blocco 3 — salvato esclusivamente tramite API autenticata del facilitatore.
   priority?: PriorityEvaluation;
+  priorityReflection?: PriorityReflection;
+  priorityAdvice?: PriorityAdvice;
   progress?: ParticipantProgress;
 };
 

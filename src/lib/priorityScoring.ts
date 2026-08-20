@@ -9,7 +9,46 @@ import {
   PriorityQuadrant,
   RISK_VETO_SCORE,
 } from "@/config/priorityFramework";
-import { Block2Submission, PriorityScores } from "./types";
+import { Block2Submission, PriorityDimension, PriorityScores } from "./types";
+
+export type PriorityScorePresentation = {
+  emoji: string;
+  sentiment: "excellent" | "good" | "neutral" | "weak" | "critical";
+  accessibleLabel: string;
+};
+
+const SCORE_PRESENTATIONS: Record<
+  PriorityScorePresentation["sentiment"],
+  Pick<PriorityScorePresentation, "emoji" | "accessibleLabel">
+> = {
+  excellent: { emoji: "🤩", accessibleLabel: "Molto favorevole" },
+  good: { emoji: "🙂", accessibleLabel: "Favorevole" },
+  neutral: { emoji: "😐", accessibleLabel: "Intermedio" },
+  weak: { emoji: "🙁", accessibleLabel: "Poco favorevole" },
+  critical: { emoji: "🚨", accessibleLabel: "Critico" },
+};
+
+/**
+ * Traduce il punteggio in una lettura visiva. Impact e Reuse migliorano al
+ * crescere del valore; Effort e Risk migliorano quando il valore diminuisce.
+ */
+export function getPriorityScorePresentation(
+  dimension: PriorityDimension,
+  score: number
+): PriorityScorePresentation {
+  const desirability = dimension === "effort" || dimension === "risk" ? 6 - score : score;
+  const sentiment: PriorityScorePresentation["sentiment"] =
+    desirability >= 5
+      ? "excellent"
+      : desirability === 4
+        ? "good"
+        : desirability === 3
+          ? "neutral"
+          : desirability === 2
+            ? "weak"
+            : "critical";
+  return { sentiment, ...SCORE_PRESENTATIONS[sentiment] };
+}
 
 export type PriorityResult = {
   score: number;

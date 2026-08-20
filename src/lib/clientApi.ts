@@ -171,3 +171,14 @@ export function savePriorityEvaluation(
     body: JSON.stringify({ participantId, ...data }),
   });
 }
+
+export function submitPriorityReflection(code: string, participantId: string, reflection: string) {
+  return jsonFetch<{
+    submission: Submission;
+    adviceGenerated: boolean;
+    warning?: string;
+  }>(`/api/session/${code}/priority-reflection`, {
+    method: "POST",
+    body: JSON.stringify({ participantId, reflection }),
+  });
+}

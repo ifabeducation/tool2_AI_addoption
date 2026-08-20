@@ -174,7 +174,7 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
     return <div className="flex min-h-screen items-center justify-center bg-ifab-bg text-sm text-ifab-text-muted">Caricamento...</div>;
   }
 
-  const { step1, step2, block2, priority } = submission;
+  const { step1, step2, block2, priority, priorityReflection, priorityAdvice } = submission;
 
   function updateSubmission(patch: Partial<Submission>) {
     setSubmission((prev) => ({ ...(prev as Submission), ...patch }));
@@ -374,10 +374,15 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
         {tab === "5" &&
           (unlockedSteps.priority ? (
             <Step5Priority
+              key={`${priority?.evaluatedAt ?? 0}-${priorityReflection?.submittedAt ?? 0}`}
               participantName={identity.name}
+              participantId={identity.participantId}
               code={code}
               evaluation={priority}
               block2={block2}
+              reflection={priorityReflection}
+              advice={priorityAdvice}
+              onSubmissionSaved={setSubmission}
             />
           ) : (
             <div className="rounded-xl border border-dashed border-ifab-border bg-white p-8 text-center text-sm text-ifab-text-muted">
