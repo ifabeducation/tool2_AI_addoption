@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, FileDown, ShieldAlert } from "lucide-react";
+import { AlertTriangle, FileCheck2, FileDown, ShieldAlert } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
 import { evaluatePriority } from "@/lib/priorityScoring";
@@ -9,6 +9,31 @@ import { Block2Submission, PriorityDimension, PriorityEvaluation } from "@/lib/t
 import { nowMs } from "@/lib/time";
 
 const DIMENSIONS: PriorityDimension[] = ["impact", "effort", "risk", "reuse"];
+
+function ImportedPdfSummary({ block2 }: { block2?: Block2Submission }) {
+  if (!block2?.sourcePdf) return null;
+  const problem = block2.values?.problema;
+  const solution = block2.values?.soluzione;
+  return (
+    <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+      <div className="flex items-start gap-3">
+        <FileCheck2 className="mt-0.5 shrink-0 text-emerald-700" size={19} />
+        <div className="min-w-0">
+          <h2 className="font-semibold text-emerald-900">Use Case importato dal workshop precedente</h2>
+          <p className="mt-0.5 truncate text-xs text-emerald-800">
+            {block2.sourcePdf.fileName} · {block2.sourcePdf.extractedFieldCount} campi acquisiti
+          </p>
+          {typeof problem === "string" && problem && (
+            <p className="mt-3 text-sm text-emerald-950"><strong>Problema:</strong> {problem}</p>
+          )}
+          {typeof solution === "string" && solution && (
+            <p className="mt-2 text-sm text-emerald-950"><strong>Soluzione:</strong> {solution}</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Step5Priority({
   participantName,
@@ -24,8 +49,11 @@ export default function Step5Priority({
   const [exporting, setExporting] = useState(false);
   if (!evaluation) {
     return (
-      <div className="rounded-xl border border-dashed border-ifab-border bg-white p-8 text-center text-sm text-ifab-text-muted">
-        Il Blocco 3 è aperto. La valutazione comparirà qui quando l&apos;AI Board avrà assegnato i punteggi al tuo caso d&apos;uso.
+      <div className="flex flex-col gap-4">
+        <ImportedPdfSummary block2={block2} />
+        <div className="rounded-xl border border-dashed border-ifab-border bg-white p-8 text-center text-sm text-ifab-text-muted">
+          Il tuo Use Case è arrivato all&apos;AI Board. La valutazione comparirà qui quando saranno stati assegnati i punteggi.
+        </div>
       </div>
     );
   }
@@ -42,6 +70,7 @@ export default function Step5Priority({
 
   return (
     <div className="flex flex-col gap-4">
+      <ImportedPdfSummary block2={block2} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-ifab-navy">Step 5 · Valutazione e priorità</h2>

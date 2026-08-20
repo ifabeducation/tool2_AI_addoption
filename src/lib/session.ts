@@ -298,6 +298,21 @@ export async function saveBlock2(
   return current;
 }
 
+/** Sostituisce la scheda con i dati estratti da un nuovo PDF importato. */
+export async function replaceBlock2(
+  code: string,
+  participantId: string,
+  data: Block2Submission
+): Promise<Submission> {
+  const redis = getRedis();
+  const current = await getSubmission(code, participantId);
+  current.block2 = data;
+  // Una nuova scheda deve essere valutata di nuovo dall'AI Board.
+  delete current.priority;
+  await redis.set(keySubmission(code, participantId), current, { ex: SESSION_TTL_SECONDS });
+  return current;
+}
+
 /** Blocco 3 — scrittura riservata alla route autenticata del facilitatore. */
 export async function savePriorityEvaluation(
   code: string,

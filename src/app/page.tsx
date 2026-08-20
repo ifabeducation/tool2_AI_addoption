@@ -24,7 +24,7 @@ export default function Home() {
         <p className="text-xs font-semibold uppercase tracking-widest text-ifab-blue">IFAB Foundation</p>
         <h1 className="mt-2 text-3xl font-bold text-ifab-navy">Workshop AI Adoption</h1>
         <p className="mt-3 text-sm text-ifab-text-muted">
-          Blocco 1 — Identificazione Opportunità: scopri e caratterizza i processi candidati all&apos;adozione dell&apos;AI.
+          Blocco 3 — importa il tuo Use Case e passa direttamente alla valutazione e priorità dell&apos;AI Board.
         </p>
 
         <ResumeCard />
@@ -38,7 +38,7 @@ export default function Home() {
               <Users className="text-ifab-blue" size={22} />
             </div>
             <span className="text-base font-semibold text-ifab-navy">Sono un partecipante</span>
-            <span className="text-xs text-ifab-text-muted">Entra con il codice sessione e il tuo nome</span>
+            <span className="text-xs text-ifab-text-muted">Entra con codice, nome e PDF Use Case precedente</span>
           </Link>
         </div>
       </div>

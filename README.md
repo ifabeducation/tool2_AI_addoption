@@ -1,8 +1,18 @@
 # Workshop AI Adoption — IFAB Foundation
 
-App interattiva per condurre dal vivo il workshop di AI Adoption. Il facilitatore sblocca gli step uno alla volta, i partecipanti (identificati dal solo nome) compilano ogni step con un assistente AI a fianco.
+App interattiva per la fase finale del workshop AI Adoption. Il partecipante carica il PDF **Use Case Submission** prodotto nel workshop precedente e accede direttamente alla valutazione e priorità; il facilitatore/AI Board assegna i punteggi e pubblica l'esito.
 
-## Come funziona il percorso (Step 1-5)
+## Percorso attuale — import PDF e Blocco 3
+
+1. Il facilitatore crea una sessione e condivide il codice a 6 caratteri.
+2. Il partecipante apre `/join`, inserisce codice e nome e seleziona il PDF Use Case precedente (massimo 4 MB).
+3. La route `POST /api/session/[code]/import-pdf` invia temporaneamente il PDF al modello OpenAI, estrae e normalizza i campi della scheda e salva in Redis solo i dati strutturati. Il PDF originale non viene conservato.
+4. Gli Step 1–4 vengono saltati e il partecipante arriva direttamente allo Step 5, in attesa della valutazione dell'AI Board.
+5. Il facilitatore trova il caso importato nel portfolio, assegna Impact, Effort, Risk e Reuse e salva la valutazione. Il partecipante riceve l'esito tramite polling e può esportarlo in PDF.
+
+Un nuovo import dello stesso partecipante sostituisce la scheda precedente e invalida l'eventuale valutazione già presente, evitando che i punteggi restino associati al documento sbagliato. Le submission create con il percorso storico restano leggibili e modificabili per compatibilità.
+
+## Percorso storico compatibile (Step 1-5)
 
 Gli Step 1-3 sono il Blocco 1 (scheda di attrito); lo Step 4 raccoglie il caso d'uso e sostituisce il vecchio Blocco 2.
 
@@ -23,7 +33,7 @@ I casi limite si valutano in ordine e cambiano la lettura della posizione (non i
 
 Domande, ancoraggi, tecnologie e messaggi vivono in `src/config/block1Frizione.ts`.
 
-Il facilitatore sblocca ogni step dalla propria dashboard; i partecipanti vedono lo sblocco entro pochi secondi (polling).
+Nel percorso storico il facilitatore può ancora sbloccare ogni step dalla dashboard; i partecipanti vedono lo sblocco entro pochi secondi (polling).
 
 ## Blocco 3 — Valutazione e priorità
 
@@ -116,7 +126,7 @@ npm run dev
 Apri [http://localhost:3000](http://localhost:3000).
 
 - **Facilitatore**: vai su `/facilitator/login`, inserisci nome + `FACILITATOR_PASSWORD`. Al primo accesso viene creata una sessione con un codice a 6 caratteri da condividere con i partecipanti.
-- **Partecipanti**: vanno su `/join` (o sul link copiato dal facilitatore) e inseriscono codice sessione + il proprio nome.
+- **Partecipanti**: vanno su `/join` (o sul link copiato dal facilitatore), inseriscono codice sessione + nome e caricano il PDF Use Case del workshop precedente.
 
 ## Deploy su Vercel
 
@@ -128,13 +138,14 @@ Vedi [DEPLOYMENT.md](./DEPLOYMENT.md) per la guida passo-passo (import del repo,
 src/
 ├── app/
 │   ├── page.tsx                      # landing (scelta partecipante/facilitatore)
-│   ├── join/page.tsx                 # ingresso partecipante
+│   ├── join/page.tsx                 # ingresso partecipante e upload PDF Use Case
 │   ├── facilitator/login/page.tsx    # login facilitatore
 │   ├── facilitator/[code]/page.tsx   # dashboard, valutazione AI Board e portfolio
 │   ├── session/[code]/page.tsx       # vista partecipante (step 1-5; valutazione finale read-only)
 │   └── api/                          # route handler (auth, sessione, agente AI)
 │       ├── session/list              # sessioni attive: rientro del facilitatore
-│       └── session/[code]/resume     # rientro del partecipante con identità salvata
+│       ├── session/[code]/resume     # rientro del partecipante con identità salvata
+│       └── session/[code]/import-pdf # estrazione PDF e accesso diretto al Blocco 3
 ├── components/                       # Step1Frizione, Step2Caratteristiche, Step3Esito,
 │                                     # MatriceImpattoProntezza (SVG),
 │                                     # UseCaseStep (Step 4: intervista + scheda),
@@ -146,7 +157,7 @@ src/
 ├── config/priorityFramework.ts       # Blocco 3: criteri, formula, soglie, quadranti e regole di rischio
 └── lib/                              # tipi, frizioneScoring (calcolo esito), client Redis,
                                       # helper sessione, auth, client API, participantStorage,
-                                      # priorityScoring, export PDF e testData (pulsante "test")
+                                      # pdfImport, priorityScoring, export PDF e testData
 ```
 
 ## Estendere ai blocchi successivi

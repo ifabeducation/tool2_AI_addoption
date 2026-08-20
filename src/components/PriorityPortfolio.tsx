@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, Pencil, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, FileCheck2, Pencil, ShieldAlert } from "lucide-react";
 import { PRIORITY_LEVELS } from "@/config/priorityFramework";
 import { evaluatePriority } from "@/lib/priorityScoring";
 import { Participant, PriorityEvaluation, Submission } from "@/lib/types";
@@ -93,6 +93,11 @@ export default function PriorityPortfolio({
                     <td className="max-w-xs py-3 pr-3">
                       <p className="font-semibold text-ifab-navy">{participant.name}</p>
                       <p className="mt-0.5 text-ifab-text-muted">{caseExcerpt(submission)}</p>
+                      {submission.block2?.sourcePdf && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
+                          <FileCheck2 size={11} /> PDF importato · {submission.block2.sourcePdf.fileName}
+                        </p>
+                      )}
                     </td>
                     {(["impact", "effort", "risk", "reuse"] as const).map((key) => (
                       <td key={key} className="py-3 pr-3 font-semibold text-ifab-text">

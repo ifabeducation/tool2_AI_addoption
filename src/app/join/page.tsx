@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ApiError, joinSession, resumeSession } from "@/lib/clientApi";
+import { ApiError, importUseCasePdf, joinSession, resumeSession } from "@/lib/clientApi";
 import {
   clearStoredIdentity,
   readFacilitatorCode,
@@ -10,7 +10,7 @@ import {
   saveStoredIdentity,
 } from "@/lib/participantStorage";
 import { TEST_PARTICIPANT_NAME } from "@/lib/testData";
-import { RotateCcw, Users } from "lucide-react";
+import { FileCheck2, FileUp, RotateCcw, Users } from "lucide-react";
 import TestFillButton from "@/components/TestFillButton";
 
 function JoinForm() {
@@ -24,6 +24,7 @@ function JoinForm() {
 
   const [code, setCode] = useState(searchParams.get("code")?.toUpperCase() ?? "");
   const [name, setName] = useState(testMode ? TEST_PARTICIPANT_NAME : "");
+  const [pdf, setPdf] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resumable, setResumable] = useState<{ code: string; participantId: string; name: string } | null>(null);
@@ -94,14 +95,23 @@ function JoinForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!code.trim() || !name.trim()) {
-      setError("Inserisci sia il codice sessione che il tuo nome.");
+    if (!code.trim() || !name.trim() || !pdf) {
+      setError("Inserisci codice, nome e il PDF Use Case del workshop precedente.");
+      return;
+    }
+    if (pdf.type !== "application/pdf" && !pdf.name.toLowerCase().endsWith(".pdf")) {
+      setError("Il file selezionato deve essere un PDF.");
+      return;
+    }
+    if (pdf.size > 4 * 1024 * 1024) {
+      setError("Il PDF non può superare 4 MB.");
       return;
     }
     setLoading(true);
     try {
       const normalizedCode = code.trim().toUpperCase();
       const { participant } = await joinSession(normalizedCode, name.trim());
+      await importUseCasePdf(normalizedCode, participant.participantId, pdf);
       saveStoredIdentity({
         code: normalizedCode,
         participantId: participant.participantId,
@@ -131,7 +141,7 @@ function JoinForm() {
           </div>
           <h1 className="text-xl font-semibold text-ifab-navy">Workshop AI Adoption</h1>
           <p className="mt-1 text-sm text-ifab-text-muted">
-            Inserisci il codice sessione fornito dal facilitatore e il tuo nome per partecipare.
+            Carica il PDF Use Case del workshop precedente per passare direttamente alla valutazione e {"priorit\u00e0"}.
           </p>
         </div>
 
@@ -194,6 +204,36 @@ function JoinForm() {
               Se rientri con lo stesso nome ritroverai i dati già inseriti.
             </p>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ifab-text-muted" htmlFor="use-case-pdf">
+              PDF Use Case precedente
+            </label>
+            <input
+              id="use-case-pdf"
+              type="file"
+              accept="application/pdf,.pdf"
+              className="peer sr-only"
+              onChange={(event) => {
+                setPdf(event.target.files?.[0] ?? null);
+                setError(null);
+              }}
+            />
+            <label
+              htmlFor="use-case-pdf"
+              className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-ifab-border bg-ifab-bg-soft px-4 py-3 text-sm transition hover:border-ifab-blue peer-focus-visible:ring-2 peer-focus-visible:ring-ifab-blue"
+            >
+              {pdf ? <FileCheck2 className="shrink-0 text-emerald-600" size={20} /> : <FileUp className="shrink-0 text-ifab-blue" size={20} />}
+              <span className="min-w-0">
+                <span className="block truncate font-medium text-ifab-navy">
+                  {pdf?.name ?? "Seleziona il PDF Use Case Submission"}
+                </span>
+                <span className="block text-xs text-ifab-text-muted">PDF, massimo 4 MB</span>
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-ifab-text-muted">
+              Il file viene analizzato per importare la scheda; il PDF originale non viene conservato.
+            </p>
+          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -202,7 +242,7 @@ function JoinForm() {
             disabled={loading}
             className="mt-2 rounded-lg bg-ifab-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ifab-blue-dark disabled:opacity-60"
           >
-            {loading ? "Accesso in corso..." : "Entra nel workshop"}
+            {loading ? "Importazione PDF in corso..." : "Vai a valutazione e priorit\u00e0"}
           </button>
         </form>
       </div>

@@ -102,6 +102,12 @@ export type Block2Submission = {
   interviewDone?: boolean;
   updatedAt?: number;
   completedAt?: number;
+  /** Documento prodotto nel workshop precedente e importato per il Blocco 3. */
+  sourcePdf?: {
+    fileName: string;
+    importedAt: number;
+    extractedFieldCount: number;
+  };
 };
 
 export type PriorityDimension = "impact" | "effort" | "risk" | "reuse";

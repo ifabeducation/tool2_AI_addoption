@@ -102,7 +102,8 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
           // Uno step salvato ma non più previsto (struttura cambiata) non
           // riapre nulla: si riparte dal primo step sbloccato.
           const savedStep = savedTab ? TAB_TO_STEP[savedTab] : undefined;
-          if (savedTab && savedStep && meta.unlockedSteps[savedStep]) setTab(savedTab);
+          if (restored.block2?.sourcePdf) setTab("5");
+          else if (savedTab && savedStep && meta.unlockedSteps[savedStep]) setTab(savedTab);
           setResumedBanner(hasWork(restored));
         });
       })
@@ -242,6 +243,8 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
     { key: "UC", label: "4 · Use Case" },
     { key: "5", label: "5 · Valutazione e priorità" },
   ];
+  const importedFromPdf = Boolean(block2?.sourcePdf);
+  const visibleTabs = importedFromPdf ? tabs.filter((item) => item.key === "5") : tabs;
 
   const testTitles: Record<ParticipantTab, string> = {
     "1": "Compila lo Step 1 con risposte di esempio",
@@ -262,11 +265,13 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
             <h1 className="text-base font-semibold text-ifab-navy">Ciao, {identity.name}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <TestFillButton
-              onClick={() => void handleTestFill()}
-              title={testTitles[tab]}
-              disabled={tab === "5" || !unlockedSteps[TAB_TO_STEP[tab]]}
-            />
+            {!importedFromPdf && (
+              <TestFillButton
+                onClick={() => void handleTestFill()}
+                title={testTitles[tab]}
+                disabled={tab === "5" || !unlockedSteps[TAB_TO_STEP[tab]]}
+              />
+            )}
             <div className="flex items-center gap-1.5 rounded-full bg-ifab-bg-soft px-3 py-1.5 text-xs text-ifab-text-muted">
               <Users size={14} /> Sessione {identity.code}
             </div>
@@ -298,7 +303,7 @@ export default function SessionPage({ params }: { params: Promise<{ code: string
       )}
 
       <nav className="mx-auto flex max-w-4xl flex-wrap items-center gap-2 px-4 pt-4 sm:px-8">
-        {tabs.map((t) => {
+        {visibleTabs.map((t) => {
           const unlocked = unlockedSteps[TAB_TO_STEP[t.key]];
           return (
             <Fragment key={t.key}>

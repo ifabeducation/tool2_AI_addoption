@@ -378,8 +378,10 @@ export default function FacilitatorDashboard({ params }: { params: Promise<{ cod
                     const useCaseFilled = Object.values(submission.block2?.values ?? {}).filter((v) =>
                       Array.isArray(v) ? v.length > 0 : Boolean(v && v.trim())
                     ).length;
-                    const useCaseLabel = submission.block2?.completedAt
-                      ? "✅"
+                    const useCaseLabel = submission.block2?.sourcePdf
+                      ? `PDF · ${submission.block2.sourcePdf.extractedFieldCount} campi`
+                      : submission.block2?.completedAt
+                        ? "✅"
                       : useCaseFilled > 0
                         ? `${useCaseFilled}/${BLOCK2_FIELD_COUNT}`
                         : "—";

@@ -60,6 +60,25 @@ export function joinSession(code: string, name: string) {
   });
 }
 
+export async function importUseCasePdf(code: string, participantId: string, file: File) {
+  const formData = new FormData();
+  formData.set("participantId", participantId);
+  formData.set("file", file);
+  const res = await fetch(`/api/session/${code}/import-pdf`, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(data.error ?? `Errore ${res.status}`, res.status, data.reason);
+  }
+  return data as {
+    submission: Submission;
+    meta: import("./types").SessionMeta;
+    extractedFieldCount: number;
+  };
+}
+
 /** Rientro con l'identità già salvata nel browser: nessun codice/nome da riscrivere. */
 export function resumeSession(code: string, participantId: string) {
   return jsonFetch<{
