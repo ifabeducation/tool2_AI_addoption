@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f5f5;
+  --foreground: #292929;
+
+  /* IFAB Foundation brand palette (estratta da ifabfoundation.org/it) */
+  --ifab-blue: #1b98e0;
+  --ifab-blue-dark: #0345a5;
+  --ifab-navy: #21344d;
+  --ifab-navy-deep: #021f54;
+  --ifab-gold: #dbcb4f;
+  --ifab-bg: #f5f5f5;
+  --ifab-bg-soft: #f2f2f2;
+  --ifab-text: #292929;
+  --ifab-text-muted: #777777;
+  --ifab-border: #e5e5e5;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-ifab-blue: var(--ifab-blue);
+  --color-ifab-blue-dark: var(--ifab-blue-dark);
+  --color-ifab-navy: var(--ifab-navy);
+  --color-ifab-navy-deep: var(--ifab-navy-deep);
+  --color-ifab-gold: var(--ifab-gold);
+  --color-ifab-bg: var(--ifab-bg);
+  --color-ifab-bg-soft: var(--ifab-bg-soft);
+  --color-ifab-text: var(--ifab-text);
+  --color-ifab-text-muted: var(--ifab-text-muted);
+  --color-ifab-border: var(--ifab-border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+.ifab-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.ifab-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--ifab-border);
+  border-radius: 4px;
+}
