@@ -24,7 +24,7 @@ export default function Home() {
         <p className="text-xs font-semibold uppercase tracking-widest text-ifab-blue">IFAB Foundation</p>
         <h1 className="mt-2 text-3xl font-bold text-ifab-navy">Workshop AI Adoption</h1>
         <p className="mt-3 text-sm text-ifab-text-muted">
-          Blocco 3 — importa il tuo Use Case e passa direttamente alla valutazione e priorità dell&apos;AI Board.
+          Importa il tuo Use Case, completa la tua valutazione e ricevi consigli personalizzati.
         </p>
 
         <ResumeCard />

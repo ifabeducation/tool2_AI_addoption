@@ -29,8 +29,9 @@ Apri l'URL assegnato da Vercel (es. `https://ifab-workshop-ai-adoption.vercel.ap
 2. Viene creata una sessione con un codice a 6 caratteri
 3. Da un altro browser/tab in incognito, vai su `/join`, inserisci quel codice e un nome
 4. Apri il link partecipante, inserisci codice + nome e carica un PDF `Use Case Submission` esportato dal workshop precedente
-5. Verifica che il partecipante arrivi direttamente a **Valutazione e priorità** e che il portfolio facilitatore mostri il PDF importato
-6. Assegna i quattro punteggi dal portfolio: il risultato deve comparire al partecipante entro ~5 secondi
+5. Verifica che il partecipante arrivi direttamente a **Valutazione e priorità** e possa assegnare personalmente i quattro punteggi
+6. Controlla che il portfolio facilitatore mostri l'autovalutazione in sola lettura entro ~5 secondi
+7. Inserisci una considerazione come partecipante e verifica che i consigli IA compaiano soltanto dopo l'invio
 5. Prova la chat dell'agente AI in una sottosezione
 
 Se qualcosa non risponde, controlla i log in Vercel → Deployments → (ultimo deploy) → Functions, per capire se manca una env var.

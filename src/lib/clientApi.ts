@@ -154,13 +154,12 @@ export function fetchAggregate(code: string) {
   }>(`/api/session/${code}/aggregate`);
 }
 
-export function savePriorityEvaluation(
+export function submitPriorityEvaluation(
   code: string,
   participantId: string,
   data: {
     scores: import("./types").PriorityScores;
     rationale?: import("./types").PriorityEvaluation["rationale"];
-    boardNotes?: string;
   }
 ) {
   return jsonFetch<{

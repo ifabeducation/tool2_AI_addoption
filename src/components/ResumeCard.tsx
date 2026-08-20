@@ -5,25 +5,13 @@ import Link from "next/link";
 import { RotateCcw, X } from "lucide-react";
 import { ApiError, resumeSession } from "@/lib/clientApi";
 import { clearStoredIdentity, readStoredIdentity } from "@/lib/participantStorage";
-import { ParticipantTab, Submission } from "@/lib/types";
-
-const TAB_LABELS: Record<ParticipantTab, string> = {
-  "1": "Step 1 · Scheda di attrito",
-  "2": "Step 2 · Caratteristiche",
-  "3": "Step 3 · Esito",
-  UC: "Step 4 · Use Case",
-  "5": "Step 5 · Valutazione e priorità",
-};
+import { Submission } from "@/lib/types";
 
 function describeProgress(submission: Submission): string {
-  const tab = submission.progress?.tab;
-  // Una posizione salvata con una struttura precedente può non esistere più.
-  if (tab && TAB_LABELS[tab]) return TAB_LABELS[tab];
-  if (submission.priority?.evaluatedAt) return TAB_LABELS["5"];
-  if (submission.block2?.updatedAt) return TAB_LABELS.UC;
-  if (submission.step2?.completedAt) return TAB_LABELS["3"];
-  if (submission.step2?.updatedAt) return TAB_LABELS["2"];
-  return TAB_LABELS["1"];
+  if (submission.priorityAdvice) return "Consigli IA disponibili";
+  if (submission.priorityReflection) return "Considerazione inserita";
+  if (submission.priority?.evaluatedAt) return "Valutazione completata";
+  return "Valutazione e priorità";
 }
 
 /**

@@ -52,14 +52,14 @@ export async function downloadPriorityPdf(input: {
     write(`${config.label}: ${score}/5 · ${criterion?.label ?? ""}`, 11, true, 2);
     write(`Criterio: ${criterion?.description || "—"}`, 9, false, 3);
     if (input.evaluation.rationale?.[dimension]) {
-      write(`Motivazione AI Board: ${input.evaluation.rationale[dimension]}`, 9, false, 10);
+      write(`Motivazione del partecipante: ${input.evaluation.rationale[dimension]}`, 9, false, 10);
     }
   }
 
   if (result.riskVeto) write("VETO RISCHIO — Valutazione Legal/Compliance necessaria prima dell'approvazione.", 10, true, 8);
   if (result.ethicalReviewRequired) write("REVIEW ETICA — Il caso impatta persone specifiche e richiede una valutazione etica esplicita.", 10, true, 8);
   write(`Azione raccomandata: ${result.action}`, 10, true, 8);
-  if (input.evaluation.boardNotes) write(`Note AI Board: ${input.evaluation.boardNotes}`, 10, false, 8);
+  if (input.evaluation.boardNotes) write(`Note della valutazione: ${input.evaluation.boardNotes}`, 10, false, 8);
   if (input.reflection) {
     write("Considerazioni del partecipante", 12, true, 3);
     write(input.reflection.text, 10, false, 12);
@@ -71,7 +71,7 @@ export async function downloadPriorityPdf(input: {
     if (input.advice.cautions.length) write(`Attenzioni: ${input.advice.cautions.join(" · ")}`, 9, false, 6);
     if (input.advice.nextSteps.length) write(`Prossimi passi: ${input.advice.nextSteps.join(" · ")}`, 9, false, 8);
   }
-  write(`Valutata da ${input.evaluation.evaluatedBy}`, 8, false, 0);
+  write(`Autovalutazione di ${input.evaluation.evaluatedBy}`, 8, false, 0);
 
   const slug = input.participantName.trim().replace(/\s+/g, "_").replace(/[^\w-]/g, "") || "partecipante";
   pdf.save(`valutazione-priorita-${slug}.pdf`);

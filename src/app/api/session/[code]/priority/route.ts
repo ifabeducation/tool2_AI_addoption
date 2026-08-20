@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getFacilitatorFromCookies } from "@/lib/auth";
 import { arePriorityScores, evaluatePriority } from "@/lib/priorityScoring";
 import {
   getParticipants,
@@ -23,11 +22,6 @@ function cleanRationale(value: unknown) {
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ code: string }> }) {
-  const facilitator = await getFacilitatorFromCookies();
-  if (!facilitator) {
-    return NextResponse.json({ error: "Non autenticato come facilitatore" }, { status: 401 });
-  }
-
   const { code } = await params;
   const body = await req.json();
   if (typeof body.participantId !== "string" || !arePriorityScores(body.scores)) {
@@ -38,7 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
   }
 
   const participants = await getParticipants(code);
-  if (!participants.some((p) => p.participantId === body.participantId)) {
+  const participant = participants.find((item) => item.participantId === body.participantId);
+  if (!participant) {
     return NextResponse.json({ error: "Partecipante non trovato" }, { status: 404 });
   }
 
@@ -53,11 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
   const evaluation = {
     scores: body.scores,
     rationale: cleanRationale(body.rationale),
-    boardNotes:
-      typeof body.boardNotes === "string" && body.boardNotes.trim()
-        ? body.boardNotes.trim().slice(0, 2000)
-        : undefined,
-    evaluatedBy: facilitator.name,
+    evaluatedBy: participant.name,
     evaluatedAt: Date.now(),
   };
   const submission = await savePriorityEvaluation(code, body.participantId, evaluation);

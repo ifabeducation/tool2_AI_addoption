@@ -15,7 +15,7 @@ export type UnlockedSteps = {
   // Step 4 — descrizione del processo e scheda Use Case: un unico step, che
   // parte dall'intervista dell'agente e finisce sulla scheda da confermare.
   useCase: boolean;
-  // Step 5 — esito del Blocco 3, compilato dall'AI Board e visibile in sola lettura.
+  // Step 5 — autovalutazione Impact, Effort, Risk e Reuse del partecipante.
   priority: boolean;
 };
 
@@ -24,7 +24,7 @@ export const DEFAULT_UNLOCKED_STEPS: UnlockedSteps = {
   step2: false,
   step3: false,
   useCase: false,
-  priority: false,
+  priority: true,
 };
 
 export type SessionMeta = {
@@ -159,7 +159,7 @@ export type Submission = {
   // Lo Step 3 non ha dati propri: l'esito è calcolato da step1 + step2
   // (vedi lib/frizioneScoring.ts), così non può divergere da ciò che si vede.
   block2?: Block2Submission;
-  // Blocco 3 — salvato esclusivamente tramite API autenticata del facilitatore.
+  // Blocco 3 — autovalutazione compilata dal partecipante.
   priority?: PriorityEvaluation;
   priorityReflection?: PriorityReflection;
   priorityAdvice?: PriorityAdvice;

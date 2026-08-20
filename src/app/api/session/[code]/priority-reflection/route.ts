@@ -30,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
   const current = await getSubmission(code, participantId);
   if (!current.priority || !current.block2?.values) {
     return NextResponse.json(
-      { error: "La valutazione dell'AI Board non è ancora disponibile" },
+      { error: "Completa prima la tua valutazione" },
       { status: 409 }
     );
   }

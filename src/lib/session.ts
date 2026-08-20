@@ -309,7 +309,7 @@ export async function replaceBlock2(
   const redis = getRedis();
   const current = await getSubmission(code, participantId);
   current.block2 = data;
-  // Una nuova scheda deve essere valutata di nuovo dall'AI Board.
+  // Una nuova scheda deve essere valutata di nuovo dal partecipante.
   delete current.priority;
   delete current.priorityReflection;
   delete current.priorityAdvice;
@@ -317,7 +317,7 @@ export async function replaceBlock2(
   return current;
 }
 
-/** Blocco 3 — scrittura riservata alla route autenticata del facilitatore. */
+/** Blocco 3 — autovalutazione del partecipante. */
 export async function savePriorityEvaluation(
   code: string,
   participantId: string,

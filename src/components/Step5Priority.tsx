@@ -1,22 +1,157 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { AlertTriangle, FileCheck2, FileDown, LoaderCircle, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, FileCheck2, FileDown, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
-import { submitPriorityReflection } from "@/lib/clientApi";
+import { submitPriorityEvaluation, submitPriorityReflection } from "@/lib/clientApi";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
-import { evaluatePriority, getPriorityScorePresentation } from "@/lib/priorityScoring";
+import { arePriorityScores, evaluatePriority, getPriorityScorePresentation } from "@/lib/priorityScoring";
 import {
   Block2Submission,
   PriorityAdvice,
   PriorityDimension,
   PriorityEvaluation,
   PriorityReflection,
+  PriorityScores,
   Submission,
 } from "@/lib/types";
 import { nowMs } from "@/lib/time";
 
 const DIMENSIONS: PriorityDimension[] = ["impact", "effort", "risk", "reuse"];
+
+function PrioritySelfAssessment({
+  code,
+  participantId,
+  block2,
+  current,
+  onSaved,
+  onCancel,
+}: {
+  code: string;
+  participantId: string;
+  block2?: Block2Submission;
+  current?: PriorityEvaluation;
+  onSaved: (submission: Submission) => void;
+  onCancel?: () => void;
+}) {
+  const [scores, setScores] = useState<Partial<PriorityScores>>(current?.scores ?? {});
+  const [rationale, setRationale] = useState<Partial<Record<PriorityDimension, string>>>(current?.rationale ?? {});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const completeScores = arePriorityScores(scores) ? scores : null;
+  const preview = completeScores ? evaluatePriority(completeScores, block2) : null;
+
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!completeScores) {
+      setMessage("Assegna un punteggio a tutte e quattro le dimensioni.");
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await submitPriorityEvaluation(code, participantId, {
+        scores: completeScores,
+        rationale,
+      });
+      onSaved(response.submission);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Salvataggio non riuscito");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSave} className="flex flex-col gap-4">
+      <section className="rounded-xl border border-ifab-blue/30 bg-blue-50/50 p-5">
+        <h2 className="text-lg font-semibold text-ifab-navy">5 · La tua valutazione e priorità</h2>
+        <p className="mt-1 text-sm text-ifab-text-muted">
+          Valuta personalmente il caso importato. Per Impact e Reuse un valore alto è positivo; per Effort e Risk indica maggiore complessità o rischio.
+        </p>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {DIMENSIONS.map((dimension) => {
+          const config = PRIORITY_DIMENSIONS[dimension];
+          const selected = scores[dimension];
+          const criterion = config.criteria.find((item) => item.score === selected);
+          const presentation = selected ? getPriorityScorePresentation(dimension, selected) : null;
+          return (
+            <fieldset key={dimension} className="rounded-xl border border-ifab-border bg-white p-4">
+              <legend className="px-1 font-semibold text-ifab-navy">{config.label}</legend>
+              <p className="mb-3 text-xs text-ifab-text-muted">{config.description}</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {config.criteria.map((item) => (
+                  <button
+                    key={item.score}
+                    type="button"
+                    onClick={() => setScores((previous) => ({ ...previous, [dimension]: item.score }))}
+                    aria-pressed={selected === item.score}
+                    title={`${item.label}: ${item.description}`}
+                    className={`rounded-lg border px-1 py-2 text-center transition ${
+                      selected === item.score
+                        ? "border-ifab-blue bg-ifab-blue font-bold text-white"
+                        : "border-ifab-border bg-white text-ifab-navy hover:border-ifab-blue"
+                    }`}
+                  >
+                    <span className="block text-base">{item.score}</span>
+                    <span className="block truncate text-[10px]">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              {criterion && presentation && (
+                <div className="mt-3 rounded-lg bg-ifab-bg-soft p-3 text-sm">
+                  <p className="font-medium text-ifab-text">
+                    <span role="img" aria-label={presentation.accessibleLabel}>{presentation.emoji}</span>{" "}
+                    {criterion.label} · {selected}/5
+                  </p>
+                  <p className="mt-1 text-xs text-ifab-text-muted">{criterion.description}</p>
+                </div>
+              )}
+              <label htmlFor={`self-rationale-${dimension}`} className="mt-3 block text-xs font-medium text-ifab-text">
+                Perché hai scelto questo punteggio? <span className="font-normal text-ifab-text-muted">(facoltativo)</span>
+              </label>
+              <textarea
+                id={`self-rationale-${dimension}`}
+                value={rationale[dimension] ?? ""}
+                onChange={(event) => setRationale((previous) => ({ ...previous, [dimension]: event.target.value.slice(0, 1000) }))}
+                rows={2}
+                maxLength={1000}
+                className="mt-1 w-full rounded-lg border border-ifab-border px-3 py-2 text-xs outline-none focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20"
+              />
+            </fieldset>
+          );
+        })}
+      </div>
+
+      {preview && (
+        <section className="grid gap-3 rounded-xl border border-ifab-border bg-white p-5 sm:grid-cols-3">
+          <div><p className="text-xs text-ifab-text-muted">Priority Score</p><p className="text-2xl font-bold text-ifab-navy">{preview.score}/20</p></div>
+          <div><p className="text-xs text-ifab-text-muted">Priorità</p><p className="text-xl font-bold" style={{ color: PRIORITY_LEVELS[preview.level].color }}>{preview.levelLabel}</p></div>
+          <div><p className="text-xs text-ifab-text-muted">Quadrante</p><p className="text-xl font-bold text-ifab-navy">{preview.quadrantLabel}</p></div>
+        </section>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={saving || !completeScores}
+          className="flex items-center gap-2 rounded-lg bg-ifab-navy px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-ifab-blue disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? <LoaderCircle className="animate-spin" size={16} /> : <Save size={16} />}
+          {saving ? "Salvataggio..." : current ? "Aggiorna la mia valutazione" : "Conferma la mia valutazione"}
+        </button>
+        {current && onCancel && (
+          <button type="button" onClick={onCancel} disabled={saving} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-ifab-text-muted hover:text-ifab-navy disabled:opacity-50">
+            Annulla
+          </button>
+        )}
+        {message && <p role="alert" className="text-sm text-red-700">{message}</p>}
+      </div>
+    </form>
+  );
+}
 
 function ImportedPdfSummary({ block2 }: { block2?: Block2Submission }) {
   if (!block2?.sourcePdf) return null;
@@ -67,14 +202,31 @@ export default function Step5Priority({
   const [requestingAdvice, setRequestingAdvice] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingEvaluation, setEditingEvaluation] = useState(false);
 
-  if (!evaluation) {
+  if (!block2?.values || Object.keys(block2.values).length === 0) {
     return (
       <div className="flex flex-col gap-4">
         <ImportedPdfSummary block2={block2} />
         <div className="rounded-xl border border-dashed border-ifab-border bg-white p-8 text-center text-sm text-ifab-text-muted">
-          Il tuo Use Case è arrivato all&apos;AI Board. La valutazione comparirà qui quando saranno stati assegnati i punteggi.
+          Non è disponibile un caso d&apos;uso da valutare. Esci e carica il PDF prodotto nella sessione precedente.
         </div>
+      </div>
+    );
+  }
+
+  if (!evaluation || editingEvaluation) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ImportedPdfSummary block2={block2} />
+        <PrioritySelfAssessment
+          code={code}
+          participantId={participantId}
+          block2={block2}
+          current={evaluation}
+          onSaved={onSubmissionSaved}
+          onCancel={() => setEditingEvaluation(false)}
+        />
       </div>
     );
   }
@@ -122,17 +274,26 @@ export default function Step5Priority({
       <ImportedPdfSummary block2={block2} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-ifab-navy">Step 5 · Valutazione e priorità</h2>
-          <p className="text-sm text-ifab-text-muted">Esito finale assegnato dall&apos;AI Board. I valori sono in sola lettura.</p>
+          <h2 className="text-lg font-semibold text-ifab-navy">5 · Valutazione e priorità</h2>
+          <p className="text-sm text-ifab-text-muted">Risultato calcolato a partire dalla tua autovalutazione.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void exportPdf()}
-          disabled={exporting}
-          className="flex items-center gap-2 rounded-lg border border-ifab-navy px-4 py-2 text-sm font-semibold text-ifab-navy transition hover:bg-ifab-navy hover:text-white disabled:opacity-50"
-        >
-          <FileDown size={16} /> {exporting ? "Preparo il PDF..." : "Scarica PDF"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setEditingEvaluation(true)}
+            className="flex items-center gap-2 rounded-lg border border-ifab-border px-4 py-2 text-sm font-semibold text-ifab-navy transition hover:border-ifab-navy"
+          >
+            <Pencil size={16} /> Modifica valutazione
+          </button>
+          <button
+            type="button"
+            onClick={() => void exportPdf()}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-lg border border-ifab-navy px-4 py-2 text-sm font-semibold text-ifab-navy transition hover:bg-ifab-navy hover:text-white disabled:opacity-50"
+          >
+            <FileDown size={16} /> {exporting ? "Preparo il PDF..." : "Scarica PDF"}
+          </button>
+        </div>
       </div>
 
       <section className="grid gap-3 rounded-xl border border-ifab-border bg-white p-5 sm:grid-cols-3">
@@ -167,7 +328,7 @@ export default function Step5Priority({
               <p className="mt-1 text-xs text-ifab-text-muted">{criterion?.description}</p>
               {evaluation.rationale?.[dimension] && (
                 <p className="mt-3 border-t border-ifab-border pt-3 text-xs text-ifab-text">
-                  <strong>Motivazione AI Board:</strong> {evaluation.rationale[dimension]}
+                  <strong>La tua motivazione:</strong> {evaluation.rationale[dimension]}
                 </p>
               )}
             </div>
@@ -184,13 +345,13 @@ export default function Step5Priority({
       {result.ethicalReviewRequired && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           <AlertTriangle className="shrink-0" size={18} />
-          <span>Il caso impatta persone specifiche: l&apos;AI Board richiede una valutazione etica esplicita.</span>
+          <span>Il caso impatta persone specifiche: il framework richiede una valutazione etica esplicita.</span>
         </div>
       )}
 
       {evaluation.boardNotes && (
         <section className="rounded-xl border border-ifab-border bg-white p-5">
-          <h3 className="text-sm font-semibold text-ifab-navy">Note dell&apos;AI Board</h3>
+          <h3 className="text-sm font-semibold text-ifab-navy">Note della valutazione</h3>
           <p className="mt-2 text-sm text-ifab-text">{evaluation.boardNotes}</p>
         </section>
       )}
