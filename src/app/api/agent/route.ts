@@ -9,6 +9,15 @@ import {
   sanitizeClosedGroups,
   sanitizeInterviewFields,
 } from "@/config/block2Form";
+import {
+  buildTechSelectorSystemPrompt,
+  matchTechnologies,
+  ProcessCategoryKey,
+  remainingTechSelectorGroups,
+  sanitizeTechSelectorClosedGroups,
+  sanitizeTechSelectorFields,
+  StrategicObjectiveKey,
+} from "@/config/techSelector";
 import { Block2FieldValue } from "@/lib/types";
 
 type AgentContext = {
@@ -18,6 +27,10 @@ type AgentContext = {
   processoContext?: string;
   values?: Record<string, Block2FieldValue>;
   closedGroups?: string[];
+  /** Step 5: assistente di selezione tecnologica, prima della considerazione finale. */
+  useCaseSummary?: string;
+  techValues?: { categoria?: ProcessCategoryKey; obiettivi?: StrategicObjectiveKey[] };
+  techClosedGroups?: string[];
 };
 
 /**
@@ -96,6 +109,69 @@ async function runUseCaseInterview(messages: ChatTurn[], context: AgentContext) 
   });
 }
 
+/**
+ * Assistente dello Step 5 che precede la considerazione finale: due domande
+ * (categoria di processo, obiettivi strategici) per ricavare, con la Matrice
+ * di Selezione Tecnologica del workshop, quale tecnologia AI si adatta
+ * meglio al caso. Il confronto tra obiettivi e matrice lo calcola il server
+ * (vedi matchTechnologies): il modello spiega e chiede, non inventa né
+ * ricalcola il risultato — stesso principio di generatePriorityAdvice.
+ */
+async function runTechSelectorInterview(messages: ChatTurn[], context: AgentContext) {
+  const techValues = context.techValues ?? {};
+  const closedBefore = sanitizeTechSelectorClosedGroups(context.techClosedGroups);
+  const remaining = remainingTechSelectorGroups(closedBefore);
+
+  const priorMatch =
+    techValues.categoria && techValues.obiettivi && techValues.obiettivi.length > 0
+      ? matchTechnologies(techValues.categoria, techValues.obiettivi)
+      : null;
+
+  const systemPrompt = buildTechSelectorSystemPrompt({
+    useCaseSummary: context.useCaseSummary ?? "",
+    remainingGroups: remaining,
+    match: priorMatch,
+  });
+
+  const openai = getOpenAI();
+  const response = await openai.chat.completions.create({
+    model: CHAT_MODEL,
+    messages: [{ role: "system", content: systemPrompt }, ...messages],
+    temperature: 0.5,
+    response_format: { type: "json_object" },
+  });
+
+  const raw = (response.choices[0]?.message?.content ?? "").trim();
+  let parsed: { reply?: unknown; fields?: unknown; closed?: unknown } = {};
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    parsed = { reply: raw };
+  }
+
+  const reply = typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : raw;
+  const fields = sanitizeTechSelectorFields(parsed.fields);
+  const closedGroups = sanitizeTechSelectorClosedGroups(parsed.closed, closedBefore);
+  const remainingAfter = remainingTechSelectorGroups(closedGroups);
+
+  const mergedCategoria = fields.categoria ?? techValues.categoria;
+  const mergedObiettivi = fields.obiettivi ?? techValues.obiettivi;
+  const match =
+    mergedCategoria && mergedObiettivi && mergedObiettivi.length > 0
+      ? matchTechnologies(mergedCategoria, mergedObiettivi)
+      : null;
+
+  return NextResponse.json({
+    reply,
+    fields,
+    closedGroups,
+    remaining: remainingAfter.map((g) => g.key),
+    done: remainingAfter.length === 0,
+    match,
+    finished: false,
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const { subsection, messages, context } = await req.json();
@@ -109,6 +185,10 @@ export async function POST(req: Request) {
 
     if (subsection === "useCaseInterview") {
       return await runUseCaseInterview(turns, ctx);
+    }
+
+    if (subsection === "techSelector") {
+      return await runTechSelectorInterview(turns, ctx);
     }
 
     const systemPrompt = supportPromptFor(subsection, ctx);

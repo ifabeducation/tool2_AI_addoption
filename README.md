@@ -10,8 +10,9 @@ Web app per la fase **Valutazione e priorità**. Il partecipante importa il PDF 
 4. Il partecipante entra direttamente nell'unica fase visibile: **5 · Valutazione e priorità**.
 5. Il partecipante assegna un valore da 1 a 5 a Impact, Effort, Risk e Reuse e può motivare ogni scelta. Formula, fascia e quadrante sono calcolati automaticamente.
 6. Dopo la conferma vede criteri, spiegazioni ed emoji. Impact e Reuse migliorano salendo; Effort e Risk migliorano scendendo.
-7. Prima dei consigli IA deve inserire una propria considerazione. `POST /api/session/[code]/priority-reflection` salva prima la considerazione e solo dopo genera i consigli strutturati.
-8. Il partecipante può esportare in PDF valutazione, motivazioni, considerazione e consigli.
+7. Prima di scrivere la propria considerazione, il partecipante può aprire l'**assistente di selezione tecnologica**: una conversazione — a voce o scrivendo — che spiega le categorie di processo e gli obiettivi strategici della "Matrice di Selezione Tecnologica" del workshop, li chiede al partecipante e mostra quale tecnologia AI è più indicata (calcolo deterministico, non lasciato al modello). Il risultato può essere riportato con un clic nel campo delle considerazioni.
+8. Prima dei consigli IA deve inserire una propria considerazione. `POST /api/session/[code]/priority-reflection` salva prima la considerazione e solo dopo genera i consigli strutturati.
+9. Il partecipante può esportare in PDF valutazione, motivazioni, considerazione e consigli.
 
 Il facilitatore non sblocca fasi e non assegna punteggi. La dashboard mostra in sola lettura il portfolio aggregato, lo stato di avanzamento e la matrice Impact × Effort.
 
@@ -72,7 +73,9 @@ src/
 ├── app/api/session/[code]/priority/route.ts       # autovalutazione
 ├── app/api/session/[code]/priority-reflection/route.ts
 ├── components/Step5Priority.tsx                   # valutazione, riflessione e consigli
+├── components/TechSelectorChat.tsx                # assistente vocale/testuale di selezione tecnologica
 ├── components/PriorityPortfolio.tsx               # portfolio facilitatore
 ├── config/priorityFramework.ts                    # criteri e soglie
+├── config/techSelector.ts                         # matrice tecnologia × processo × obiettivi
 └── lib/priorityScoring.ts                         # funzioni pure
 ```

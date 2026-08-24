@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { AlertTriangle, FileCheck2, FileDown, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, FileCheck2, FileDown, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
 import { submitPriorityEvaluation, submitPriorityReflection } from "@/lib/clientApi";
+import TechSelectorChat from "./TechSelectorChat";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
 import { arePriorityScores, evaluatePriority, getPriorityScorePresentation } from "@/lib/priorityScoring";
 import {
@@ -203,6 +204,7 @@ export default function Step5Priority({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingEvaluation, setEditingEvaluation] = useState(false);
+  const [showTechAssistant, setShowTechAssistant] = useState(false);
 
   if (!block2?.values || Object.keys(block2.values).length === 0) {
     return (
@@ -232,6 +234,17 @@ export default function Step5Priority({
   }
 
   const result = evaluatePriority(evaluation.scores, block2);
+  const useCaseSummary = [block2.values?.problema, block2.values?.soluzione]
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .join(" ");
+
+  function applyTechResult(summary: string) {
+    setReflectionText((prev) => {
+      const resto = prev.trim();
+      return resto ? `${summary}${resto}` : summary;
+    });
+  }
+
   async function exportPdf() {
     setExporting(true);
     try {
@@ -355,6 +368,28 @@ export default function Step5Priority({
           <p className="mt-2 text-sm text-ifab-text">{evaluation.boardNotes}</p>
         </section>
       )}
+
+      <section className="rounded-xl border border-violet-200 bg-white p-5">
+        <button
+          type="button"
+          onClick={() => setShowTechAssistant((prev) => !prev)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+          aria-expanded={showTechAssistant}
+        >
+          <span className="flex items-center gap-2 font-semibold text-ifab-navy">
+            <Bot size={18} className="text-violet-700" /> Non sai quale tecnologia AI ti serve?
+          </span>
+          <span className="text-xs font-medium text-violet-700">{showTechAssistant ? "Nascondi" : "Parlane con l'assistente"}</span>
+        </button>
+        <p className="mt-1 text-sm text-ifab-text-muted">
+          Prima di scrivere le tue considerazioni, puoi parlare — a voce o scrivendo — con un assistente che ti spiega ambiti di processo e tipi di IA e, in base alle tue risposte, individua la tecnologia più adatta secondo la Matrice di Selezione Tecnologica del workshop.
+        </p>
+        {showTechAssistant && (
+          <div className="mt-4">
+            <TechSelectorChat useCaseSummary={useCaseSummary || undefined} onUseResult={applyTechResult} />
+          </div>
+        )}
+      </section>
 
       <form onSubmit={handleReflectionSubmit} className="rounded-xl border border-ifab-blue/30 bg-blue-50/50 p-5">
         <h3 className="font-semibold text-ifab-navy">Prima i tuoi pensieri</h3>
