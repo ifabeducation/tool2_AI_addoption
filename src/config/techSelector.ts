@@ -206,7 +206,7 @@ export function remainingTechSelectorGroups(closedGroups?: string[]): TechSelect
 
 /** Tiene solo chiavi di argomento esistenti (l'agente potrebbe inventarne). */
 export function sanitizeTechSelectorClosedGroups(raw: unknown, previous?: string[]): string[] {
-  const known = new Set(TECH_SELECTOR_GROUPS.map((g) => g.key));
+  const known = new Set<string>(TECH_SELECTOR_GROUPS.map((g) => g.key));
   const fromModel = Array.isArray(raw) ? raw.filter((k): k is string => typeof k === "string") : [];
   const merged = [...(previous ?? []), ...fromModel].filter((k) => known.has(k));
   return TECH_SELECTOR_GROUPS.map((g) => g.key).filter((k) => merged.includes(k));
