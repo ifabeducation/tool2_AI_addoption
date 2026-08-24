@@ -8,13 +8,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Nome mancante" }, { status: 400 });
   }
 
-  const expected = process.env.FACILITATOR_PASSWORD;
-  if (!expected) {
-    return NextResponse.json(
-      { error: "FACILITATOR_PASSWORD non configurata sul server" },
-      { status: 500 }
-    );
-  }
+  // Password unica dell'evento: fissa a "IFAB123!" per funzionare anche senza
+  // configurare nulla su Vercel; FACILITATOR_PASSWORD resta un override per chi
+  // vuole cambiarla senza toccare il codice.
+  const expected = process.env.FACILITATOR_PASSWORD || "IFAB123!";
 
   if (password !== expected) {
     return NextResponse.json({ error: "Password non corretta" }, { status: 401 });

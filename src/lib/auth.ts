@@ -12,11 +12,9 @@ type FacilitatorToken = {
 function getSecret(): string {
   // Riusa la password del facilitatore come base del secret di firma: per un
   // singolo evento con un'unica password condivisa non serve un segreto separato.
-  const secret = process.env.SESSION_SECRET || process.env.FACILITATOR_PASSWORD;
-  if (!secret) {
-    throw new Error("FACILITATOR_PASSWORD (o SESSION_SECRET) non configurato in .env.local");
-  }
-  return secret;
+  // Stesso default di @/app/api/facilitator/login/route.ts: se non è configurata
+  // nessuna variabile d'ambiente, la password dell'evento è "IFAB123!".
+  return process.env.SESSION_SECRET || process.env.FACILITATOR_PASSWORD || "IFAB123!";
 }
 
 function sign(payload: string): string {
