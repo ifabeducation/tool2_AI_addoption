@@ -17,11 +17,11 @@ export const PRIORITY_DIMENSIONS: Record<
     label: "Impact",
     description: "Valore generato per il business.",
     criteria: [
-      { score: 1, label: "Minimo", description: "Nice-to-have con beneficio marginale." },
+      { score: 1, label: "Minimo", description: "Nice-to-have, beneficio marginale." },
       { score: 2, label: "Limitato", description: "Beneficio locale a un singolo team o attività." },
-      { score: 3, label: "Moderato", description: "Ottimizza un processo con beneficio su un'area circoscritta." },
-      { score: 4, label: "Significativo", description: "Migliora un processo importante per più team o funzioni." },
-      { score: 5, label: "Strategico", description: "Trasforma un processo core con beneficio ampio e trasversale." },
+      { score: 3, label: "Moderato", description: "Ottimizza un processo esistente, con beneficio apprezzabile su un'area circoscritta." },
+      { score: 4, label: "Significativo", description: "Migliora un processo importante, con beneficio rilevante su più team o funzioni." },
+      { score: 5, label: "Strategico", description: "Trasforma un processo core, con beneficio ampio e trasversale a tutta l'organizzazione." },
     ],
   },
   effort: {

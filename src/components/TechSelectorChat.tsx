@@ -11,8 +11,80 @@ import {
   TechMatchResult,
   remainingTechSelectorGroups,
 } from "@/config/techSelector";
+import { PRIORITY_QUADRANTS } from "@/config/priorityFramework";
 import { ChatMessage } from "@/lib/types";
 import { MicButton, SpeakToggle, useDictation, useSpeech } from "./VoiceInput";
+
+/**
+ * Materiale di riferimento del workshop: la matrice Impatto × Sforzo (Quick
+ * Win, Strategic Bet, Fill-in, Money Pit) usata anche nella valutazione di
+ * priorità dello Step 5. È un'illustrazione statica, non un grafico dati:
+ * stesso principio di MatriceImpattoProntezza.tsx, in SVG inline così resta
+ * leggibile in entrambi i temi senza dipendere da un file immagine esterno.
+ */
+function FrameworkFigure() {
+  const W = 460;
+  const H = 230;
+  const GRID = { x: 60, y: 14, w: 380, h: 176 };
+  const cols = [GRID.x, GRID.x + GRID.w / 2, GRID.x + GRID.w];
+  const rows = [GRID.y, GRID.y + GRID.h / 2, GRID.y + GRID.h];
+
+  const quadrants = [
+    { key: "quickWin", x: cols[0], y: rows[0] },
+    { key: "strategicBet", x: cols[1], y: rows[0] },
+    { key: "fillIn", x: cols[0], y: rows[1] },
+    { key: "moneyPit", x: cols[1], y: rows[1] },
+  ] as const;
+
+  return (
+    <figure className="rounded-xl border border-ifab-border bg-white p-3">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Matrice Impatto per Sforzo: Quick Win, Strategic Bet, Fill-in, Money Pit">
+        {quadrants.map((q) => (
+          <g key={q.key}>
+            <rect x={q.x} y={q.y} width={GRID.w / 2} height={GRID.h / 2} fill={PRIORITY_QUADRANTS[q.key].color} fillOpacity={0.12} stroke="var(--ifab-border)" />
+            <text
+              x={q.x + GRID.w / 4}
+              y={q.y + GRID.h / 4}
+              textAnchor="middle"
+              fontSize={12}
+              fontWeight={700}
+              fill={PRIORITY_QUADRANTS[q.key].color}
+            >
+              {PRIORITY_QUADRANTS[q.key].label.toUpperCase()}
+            </text>
+          </g>
+        ))}
+        <line x1={cols[1]} y1={GRID.y} x2={cols[1]} y2={GRID.y + GRID.h} stroke="var(--ifab-border)" />
+        <line x1={GRID.x} y1={rows[1]} x2={GRID.x + GRID.w} y2={rows[1]} stroke="var(--ifab-border)" />
+
+        {/* Asse Impatto: verticale, a sinistra della griglia */}
+        <line x1={30} y1={GRID.y + GRID.h} x2={30} y2={GRID.y} stroke="var(--ifab-navy)" strokeWidth={3} markerEnd="url(#arrow)" />
+        <text x={14} y={GRID.y + 8} fontSize={10} fill="var(--ifab-navy)">alto</text>
+        <text x={14} y={GRID.y + GRID.h} fontSize={10} fill="var(--ifab-navy)">basso</text>
+        <text x={12} y={GRID.y + GRID.h / 2} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--ifab-navy)" transform={`rotate(-90 12 ${GRID.y + GRID.h / 2})`}>
+          IMPATTO
+        </text>
+
+        {/* Asse Sforzo: orizzontale, sotto la griglia */}
+        <line x1={GRID.x} y1={H - 16} x2={GRID.x + GRID.w} y2={H - 16} stroke="var(--ifab-navy)" strokeWidth={3} markerEnd="url(#arrow)" />
+        <text x={GRID.x} y={H - 20} fontSize={10} fill="var(--ifab-navy)">basso</text>
+        <text x={GRID.x + GRID.w} y={H - 20} textAnchor="end" fontSize={10} fill="var(--ifab-navy)">alto</text>
+        <text x={GRID.x + GRID.w / 2} y={H - 2} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--ifab-navy)">
+          SFORZO
+        </text>
+
+        <defs>
+          <marker id="arrow" markerWidth={8} markerHeight={8} refX={4} refY={4} orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="var(--ifab-navy)" />
+          </marker>
+        </defs>
+      </svg>
+      <figcaption className="mt-2 text-center text-xs text-ifab-text-muted">
+        Fig. — Matrice Impatto × Sforzo del workshop: lo stesso framework che userai nella valutazione di priorità dello Step 5.
+      </figcaption>
+    </figure>
+  );
+}
 
 /** Riassunto pronto da usare come base delle considerazioni finali del partecipante. */
 function composeSummary(match: TechMatchResult): string {
@@ -110,6 +182,8 @@ export default function TechSelectorChat({
 
   return (
     <div className="flex flex-col gap-3">
+      <FrameworkFigure />
+
       <section className="rounded-xl border border-ifab-border bg-white p-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-medium text-ifab-text-muted">
