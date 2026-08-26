@@ -13,3 +13,12 @@ export function getOpenAI(): OpenAI {
 }
 
 export const CHAT_MODEL = "gpt-4o-mini";
+
+/**
+ * Modello dell'assistente di selezione tecnologica (Step 5): interviste brevi
+ * a domande guidate con estrazione JSON, senza bisogno di ragionamento
+ * complesso. gpt-5-mini offre un buon equilibrio qualità/costo per questo
+ * compito — non tocca CHAT_MODEL, usato anche dai consigli di priorità e
+ * dagli assistenti legacy, per non cambiarne il comportamento.
+ */
+export const TECH_SELECTOR_MODEL = "gpt-5-mini";

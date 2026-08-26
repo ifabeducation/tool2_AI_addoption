@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOpenAI, CHAT_MODEL } from "@/lib/openaiClient";
+import { getOpenAI, CHAT_MODEL, TECH_SELECTOR_MODEL } from "@/lib/openaiClient";
 import { buildStep1SystemPrompt, buildStep2SystemPrompt } from "@/config/block1Frizione";
 import {
   BLOCK2_FIELDS,
@@ -138,9 +138,10 @@ async function runTechSelectorInterview(messages: ChatTurn[], context: AgentCont
 
   const openai = getOpenAI();
   const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
+    model: TECH_SELECTOR_MODEL,
     messages: [{ role: "system", content: systemPrompt }, ...messages],
-    temperature: 0.5,
+    // Niente "temperature" personalizzata: i modelli della famiglia GPT-5
+    // accettano nella Chat Completions API solo il valore di default (1).
     response_format: { type: "json_object" },
   });
 
