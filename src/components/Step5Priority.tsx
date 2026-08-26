@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { AlertTriangle, Bot, FileCheck2, FileDown, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, FileCheck2, FileDown, Lock, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
+import { STRATEGIC_OBJECTIVE_KEYS, StrategicObjectiveKey } from "@/config/techSelector";
 import { submitPriorityEvaluation, submitPriorityReflection } from "@/lib/clientApi";
 import TechSelectorChat from "./TechSelectorChat";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
@@ -204,7 +205,10 @@ export default function Step5Priority({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingEvaluation, setEditingEvaluation] = useState(false);
-  const [showTechAssistant, setShowTechAssistant] = useState(false);
+  // L'assistente tecnologia è un passaggio obbligatorio prima delle considerazioni:
+  // resta sbloccato per sempre una volta raggiunto, e per chi aveva già inviato la
+  // considerazione prima che questo passaggio esistesse (non li si blocca a ritroso).
+  const [techReady, setTechReady] = useState(Boolean(reflection));
 
   if (!block2?.values || Object.keys(block2.values).length === 0) {
     return (
@@ -237,6 +241,12 @@ export default function Step5Priority({
   const useCaseSummary = [block2.values?.problema, block2.values?.soluzione]
     .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
     .join(" ");
+  // Obiettivi già indicati nella scheda Use Case importata all'inizio (stessi id
+  // del Blocco 2, meno "altro"): la profilazione da cui l'assistente riparte.
+  const importedObiettivi = block2.values?.obiettivi;
+  const knownObjectives = (Array.isArray(importedObiettivi) ? importedObiettivi : []).filter(
+    (v): v is StrategicObjectiveKey => STRATEGIC_OBJECTIVE_KEYS.includes(v as StrategicObjectiveKey)
+  );
 
   function applyTechResult(summary: string) {
     setReflectionText((prev) => {
@@ -370,67 +380,85 @@ export default function Step5Priority({
       )}
 
       <section className="rounded-xl border border-violet-200 bg-white p-5">
-        <button
-          type="button"
-          onClick={() => setShowTechAssistant((prev) => !prev)}
-          className="flex w-full items-center justify-between gap-3 text-left"
-          aria-expanded={showTechAssistant}
-        >
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2 font-semibold text-ifab-navy">
-            <Bot size={18} className="text-violet-700" /> Non sai quale tecnologia AI ti serve?
+            <Bot size={18} className="text-violet-700" /> Passaggio obbligatorio: assistente per la scelta della tecnologia
           </span>
-          <span className="text-xs font-medium text-violet-700">{showTechAssistant ? "Nascondi" : "Parlane con l'assistente"}</span>
-        </button>
+          {techReady ? (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+              <CheckCircle2 size={13} /> Completato
+            </span>
+          ) : (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Da completare</span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-ifab-text-muted">
-          Prima di scrivere le tue considerazioni, puoi parlare — a voce o scrivendo — con un assistente che ti spiega ambiti di processo e tipi di IA e, in base alle tue risposte, individua la tecnologia più adatta secondo la Matrice di Selezione Tecnologica del workshop.
+          Prima di scrivere le tue considerazioni devi parlare — a voce o scrivendo — con questo assistente: ti spiega passo passo ambiti di processo e tipi di IA e, in base alle tue risposte, individua la tecnologia più adatta secondo la Matrice di Selezione Tecnologica del workshop.
         </p>
-        {showTechAssistant && (
-          <div className="mt-4">
-            <TechSelectorChat useCaseSummary={useCaseSummary || undefined} onUseResult={applyTechResult} />
-          </div>
-        )}
+        <div className="mt-4">
+          <TechSelectorChat
+            useCaseSummary={useCaseSummary || undefined}
+            knownObjectives={knownObjectives}
+            onUseResult={applyTechResult}
+            onReady={() => setTechReady(true)}
+          />
+        </div>
       </section>
 
-      <form onSubmit={handleReflectionSubmit} className="rounded-xl border border-ifab-blue/30 bg-blue-50/50 p-5">
-        <h3 className="font-semibold text-ifab-navy">Prima i tuoi pensieri</h3>
-        <p className="mt-1 text-sm text-ifab-text-muted">
-          Scrivi cosa condividi, cosa ti sorprende e quali vincoli conosci. I consigli IA restano nascosti finché non invii questa considerazione.
-        </p>
-        <label htmlFor="priority-reflection" className="mt-4 block text-sm font-medium text-ifab-text">
-          Le tue considerazioni
-        </label>
-        <textarea
-          id="priority-reflection"
-          value={reflectionText}
-          onChange={(event) => setReflectionText(event.target.value.slice(0, 3000))}
-          rows={5}
-          minLength={10}
-          maxLength={3000}
-          required
-          disabled={requestingAdvice}
-          placeholder="Per esempio: condivido il punteggio di impatto, ma prima dell'MVP dobbiamo verificare..."
-          className="mt-2 w-full rounded-lg border border-ifab-border bg-white px-3 py-2 text-sm text-ifab-text outline-none transition focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20 disabled:opacity-60"
-        />
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-ifab-text-muted">{reflectionText.length}/3000 caratteri</span>
-          <button
-            type="submit"
-            disabled={requestingAdvice || reflectionText.trim().length < 10}
-            className="flex items-center gap-2 rounded-lg bg-ifab-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-ifab-blue disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {requestingAdvice ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
-            {requestingAdvice
-              ? "Sto preparando i consigli..."
-              : advice
-                ? "Aggiorna e rigenera i consigli"
-                : reflection
-                  ? "Riprova a generare i consigli"
-                  : "Invia e scopri i consigli IA"}
-          </button>
+      {techReady ? (
+        <form onSubmit={handleReflectionSubmit} className="rounded-xl border border-ifab-blue/30 bg-blue-50/50 p-5">
+          <h3 className="font-semibold text-ifab-navy">Prima i tuoi pensieri</h3>
+          <p className="mt-1 text-sm text-ifab-text-muted">
+            Prima di leggere i consigli dell&apos;IA, ripensa a tutto il percorso fatto finora. Può aiutarti rispondere a queste domande:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ifab-text-muted">
+            <li>Tra i processi emersi finora, quali ti sono risultati più chiari? In quali hai avuto più interesse, e perché?</li>
+            <li>Ti sono sorte perplessità o dubbi — sui dati, sull&apos;impatto stimato, sui rischi o sulla fattibilità?</li>
+            <li>Cosa condividi della valutazione appena fatta, e cosa invece ti sorprende?</li>
+          </ul>
+          <label htmlFor="priority-reflection" className="mt-4 block text-sm font-medium text-ifab-text">
+            Le tue considerazioni
+          </label>
+          <textarea
+            id="priority-reflection"
+            value={reflectionText}
+            onChange={(event) => setReflectionText(event.target.value.slice(0, 3000))}
+            rows={5}
+            minLength={10}
+            maxLength={3000}
+            required
+            disabled={requestingAdvice}
+            placeholder="Per esempio: condivido il punteggio di impatto, ma prima dell'MVP dobbiamo verificare..."
+            className="mt-2 w-full rounded-lg border border-ifab-border bg-white px-3 py-2 text-sm text-ifab-text outline-none transition focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20 disabled:opacity-60"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-ifab-text-muted">{reflectionText.length}/3000 caratteri</span>
+            <button
+              type="submit"
+              disabled={requestingAdvice || reflectionText.trim().length < 10}
+              className="flex items-center gap-2 rounded-lg bg-ifab-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-ifab-blue disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {requestingAdvice ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
+              {requestingAdvice
+                ? "Sto preparando i consigli..."
+                : advice
+                  ? "Aggiorna e rigenera i consigli"
+                  : reflection
+                    ? "Riprova a generare i consigli"
+                    : "Invia e scopri i consigli IA"}
+            </button>
+          </div>
+          {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+          {feedback && <p role="status" className="mt-3 text-sm text-emerald-700">{feedback}</p>}
+        </form>
+      ) : (
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-ifab-border bg-white p-5 text-sm text-ifab-text-muted">
+          <Lock size={18} className="shrink-0 text-ifab-text-muted" />
+          <span>
+            <strong className="text-ifab-navy">Completa prima la conversazione con l&apos;assistente qui sopra.</strong> Ti aiuta a individuare l&apos;ambito tecnologico e il tipo di IA più adatti: solo dopo puoi scrivere le tue considerazioni finali.
+          </span>
         </div>
-        {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
-        {feedback && <p role="status" className="mt-3 text-sm text-emerald-700">{feedback}</p>}
-      </form>
+      )}
 
       {reflection && (
         <section className="rounded-xl border border-ifab-border bg-white p-5">

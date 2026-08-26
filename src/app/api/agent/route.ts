@@ -29,6 +29,8 @@ type AgentContext = {
   closedGroups?: string[];
   /** Step 5: assistente di selezione tecnologica, prima della considerazione finale. */
   useCaseSummary?: string;
+  /** Obiettivi già indicati nella scheda Use Case importata all'inizio: profilazione da riusare, non da rifare. */
+  knownObjectives?: StrategicObjectiveKey[];
   techValues?: { categoria?: ProcessCategoryKey; obiettivi?: StrategicObjectiveKey[] };
   techClosedGroups?: string[];
 };
@@ -129,6 +131,7 @@ async function runTechSelectorInterview(messages: ChatTurn[], context: AgentCont
 
   const systemPrompt = buildTechSelectorSystemPrompt({
     useCaseSummary: context.useCaseSummary ?? "",
+    knownObjectives: context.knownObjectives,
     remainingGroups: remaining,
     match: priorMatch,
   });

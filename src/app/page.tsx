@@ -1,16 +1,10 @@
 import Link from "next/link";
 import { Users, ShieldCheck } from "lucide-react";
 import ResumeCard from "@/components/ResumeCard";
-import TestFillButton from "@/components/TestFillButton";
 
 export default function Home() {
   return (
     <div className="relative flex min-h-screen flex-1 items-center justify-center bg-ifab-bg px-4">
-      {/* La home non ha campi: il "test" apre l'ingresso già compilato. */}
-      <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
-        <TestFillButton href="/join?test=1" title="Apri l'ingresso con codice e nome di esempio" />
-      </div>
-
       {/* Accesso facilitatore: presente ma defilato, la home è dei partecipanti. */}
       <Link
         href="/facilitator/login"

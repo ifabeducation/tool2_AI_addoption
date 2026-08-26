@@ -12,9 +12,7 @@ import {
   listSessions,
 } from "@/lib/clientApi";
 import { clearFacilitatorCode, readFacilitatorCode, saveFacilitatorCode } from "@/lib/participantStorage";
-import { TEST_FACILITATOR_NAME } from "@/lib/testData";
 import { SessionSummary } from "@/lib/types";
-import TestFillButton from "@/components/TestFillButton";
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleString("it-IT", {
@@ -269,14 +267,6 @@ export default function FacilitatorLoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-ifab-navy px-4">
       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white p-8 shadow-xl">
-        {/* La password non si può compilare con un dato di esempio: resta a te. */}
-        <div className="mb-2 flex justify-end">
-          <TestFillButton
-            onClick={() => setName(TEST_FACILITATOR_NAME)}
-            title="Compila il nome con un dato di esempio (la password resta da inserire)"
-          />
-        </div>
-
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ifab-navy/10">
             <ShieldCheck className="text-ifab-navy" size={22} />

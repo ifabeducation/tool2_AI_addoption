@@ -104,10 +104,16 @@ function composeSummary(match: TechMatchResult): string {
  */
 export default function TechSelectorChat({
   useCaseSummary,
+  knownObjectives,
   onUseResult,
+  onReady,
 }: {
   useCaseSummary?: string;
+  /** Obiettivi già indicati nella scheda Use Case importata: l'assistente li ripropone invece di richiederli da zero. */
+  knownObjectives?: StrategicObjectiveKey[];
   onUseResult: (summary: string) => void;
+  /** Chiamata una sola volta, alla prima comparsa del risultato: segnala che la conversazione guidata è stata completata. */
+  onReady?: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: INITIAL_MESSAGE_TECH_SELECTOR },
@@ -135,6 +141,13 @@ export default function TechSelectorChat({
     if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
   }, [messages, loading]);
 
+  // Segnala il completamento una sola volta: onReady non deve richiamarsi ad
+  // ogni turno successivo, solo al primo risultato calcolato.
+  useEffect(() => {
+    if (match) onReady?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(match)]);
+
   async function handleSend(e?: React.FormEvent) {
     e?.preventDefault();
     const testo = input.trim();
@@ -154,7 +167,7 @@ export default function TechSelectorChat({
         body: JSON.stringify({
           subsection: "techSelector",
           messages: nextMessages,
-          context: { useCaseSummary, techValues: { categoria, obiettivi }, techClosedGroups: closed },
+          context: { useCaseSummary, knownObjectives, techValues: { categoria, obiettivi }, techClosedGroups: closed },
         }),
       });
       const data = await res.json();

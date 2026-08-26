@@ -5,39 +5,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError, importUseCasePdf, joinSession, resumeSession } from "@/lib/clientApi";
 import {
   clearStoredIdentity,
-  readFacilitatorCode,
   readStoredIdentity,
   saveStoredIdentity,
 } from "@/lib/participantStorage";
-import { TEST_PARTICIPANT_NAME } from "@/lib/testData";
 import { FileCheck2, FileUp, RotateCcw, Users } from "lucide-react";
-import TestFillButton from "@/components/TestFillButton";
 
 function JoinForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Motivo per cui si è stati rimandati qui da /session/[code] (identità non più valida).
   const expired = searchParams.get("expired") === "1";
-  // Si arriva così dal pulsante "test" della home: il nome parte già compilato
-  // (il codice sessione non si può inventare, vedi fillTestData).
-  const testMode = searchParams.get("test") === "1";
 
   const [code, setCode] = useState(searchParams.get("code")?.toUpperCase() ?? "");
-  const [name, setName] = useState(testMode ? TEST_PARTICIPANT_NAME : "");
+  const [name, setName] = useState("");
   const [pdf, setPdf] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resumable, setResumable] = useState<{ code: string; participantId: string; name: string } | null>(null);
-
-  /**
-   * Dati di test: il nome è di esempio, il codice sessione no — quello esiste solo
-   * se una sessione è stata aperta. Si riusa l'ultimo codice visto su questo
-   * browser (come partecipante o come facilitatore), altrimenti resta da digitare.
-   */
-  function fillTestData() {
-    setName(TEST_PARTICIPANT_NAME);
-    setCode((prev) => prev || readStoredIdentity()?.code || readFacilitatorCode() || "");
-  }
 
   useEffect(() => {
     const identity = readStoredIdentity();
@@ -128,13 +112,6 @@ function JoinForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-ifab-bg px-4">
       <div className="w-full max-w-sm rounded-2xl border border-ifab-border bg-white p-8 shadow-sm">
-        <div className="mb-2 flex justify-end">
-          <TestFillButton
-            onClick={fillTestData}
-            title="Compila nome (e codice, se già visto su questo browser) con dati di esempio"
-          />
-        </div>
-
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ifab-blue/10">
             <Users className="text-ifab-blue" size={22} />
