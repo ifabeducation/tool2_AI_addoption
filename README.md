@@ -10,7 +10,7 @@ Web app per la fase **Valutazione e priorità**. Il partecipante importa il PDF 
 4. Il partecipante entra direttamente nell'unica fase visibile: **5 · Valutazione e priorità**.
 5. Il partecipante assegna un valore da 1 a 5 a Impact, Effort, Risk e Reuse e può motivare ogni scelta. Formula, fascia e quadrante sono calcolati automaticamente.
 6. Dopo la conferma vede criteri, spiegazioni ed emoji. Impact e Reuse migliorano salendo; Effort e Risk migliorano scendendo.
-7. Prima di scrivere la propria considerazione, il partecipante deve completare l'**assistente di selezione tecnologica**: un passaggio obbligatorio, sempre visibile (non un pulsante da aprire). È una conversazione guidata — a voce o scrivendo, con domande brevi e mirate, adatta a chi non ha esperienza tecnica — che spiega le categorie di processo e gli obiettivi strategici della "Matrice di Selezione Tecnologica" del workshop, riparte dagli obiettivi già indicati nella scheda Use Case importata invece di richiederli da zero, e mostra quale tecnologia AI è più indicata (calcolo deterministico, non lasciato al modello). Solo dopo aver ottenuto un risultato si sblocca il campo delle considerazioni, che può essere precompilato con un clic dal risultato dell'assistente.
+7. Prima di scrivere la propria considerazione, il partecipante deve completare il **Technology Feasibility Assessment**: un passaggio obbligatorio, sempre visibile (non un pulsante da aprire). Un AI Solution Architect conversazionale — a voce o scrivendo, con domande brevi, mirate e adattive (5-8, non un questionario fisso), con risposte rapide selezionabili o "Non lo so" — parte dal problema reale (output atteso, dati disponibili, regolarità del processo, autonomia richiesta) e non dalla tecnologia, per capire quale delle 8 famiglie (ML Classification/Regression/Clustering/Recommendation, Generative AI, RPA, AI Agent, Decision Support) è davvero adatta. Non propone di default GenAI o AI Agent. Il risultato — tecnologia, motivazioni, fattibilità, prerequisiti presenti/da verificare, rischio tecnico, approccio MVP — è calcolato in modo deterministico da `recommendTechnology`, mai dal modello. Solo dopo aver ottenuto un risultato si sblocca il campo delle considerazioni, che può essere precompilato con un clic dal risultato dell'assistente.
 8. Prima dei consigli IA deve inserire una propria considerazione. `POST /api/session/[code]/priority-reflection` salva prima la considerazione e solo dopo genera i consigli strutturati.
 9. Il partecipante può esportare in PDF valutazione, motivazioni, considerazione e consigli.
 
@@ -73,9 +73,9 @@ src/
 ├── app/api/session/[code]/priority/route.ts       # autovalutazione
 ├── app/api/session/[code]/priority-reflection/route.ts
 ├── components/Step5Priority.tsx                   # valutazione, riflessione e consigli
-├── components/TechSelectorChat.tsx                # assistente vocale/testuale di selezione tecnologica
+├── components/TechSelectorChat.tsx                # Technology Feasibility Assessment (chat vocale/testuale)
 ├── components/PriorityPortfolio.tsx               # portfolio facilitatore
-├── config/priorityFramework.ts                    # criteri e soglie
-├── config/techSelector.ts                         # matrice tecnologia × processo × obiettivi
+├── config/priorityFramework.ts                    # criteri, scale 1-5 e soglie di Impact/Effort/Risk/Reuse
+├── config/techSelector.ts                         # famiglie tecnologiche, dimensioni adattive, motore di raccomandazione
 └── lib/priorityScoring.ts                         # funzioni pure
 ```

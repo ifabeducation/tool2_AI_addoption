@@ -3,7 +3,6 @@
 import { FormEvent, useState } from "react";
 import { AlertTriangle, Bot, CheckCircle2, FileCheck2, FileDown, Lock, LoaderCircle, Pencil, Save, ShieldAlert, Sparkles } from "lucide-react";
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
-import { STRATEGIC_OBJECTIVE_KEYS, StrategicObjectiveKey } from "@/config/techSelector";
 import { submitPriorityEvaluation, submitPriorityReflection } from "@/lib/clientApi";
 import TechSelectorChat from "./TechSelectorChat";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
@@ -77,40 +76,75 @@ function PrioritySelfAssessment({
         {DIMENSIONS.map((dimension) => {
           const config = PRIORITY_DIMENSIONS[dimension];
           const selected = scores[dimension];
-          const criterion = config.criteria.find((item) => item.score === selected);
-          const presentation = selected ? getPriorityScorePresentation(dimension, selected) : null;
           return (
             <fieldset key={dimension} className="rounded-xl border border-ifab-border bg-white p-4">
-              <legend className="px-1 font-semibold text-ifab-navy">{config.label}</legend>
-              <p className="mb-3 text-xs text-ifab-text-muted">{config.description}</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {config.criteria.map((item) => (
-                  <button
-                    key={item.score}
-                    type="button"
-                    onClick={() => setScores((previous) => ({ ...previous, [dimension]: item.score }))}
-                    aria-pressed={selected === item.score}
-                    title={`${item.label}: ${item.description}`}
-                    className={`rounded-lg border px-1 py-2 text-center transition ${
-                      selected === item.score
-                        ? "border-ifab-blue bg-ifab-blue font-bold text-white"
-                        : "border-ifab-border bg-white text-ifab-navy hover:border-ifab-blue"
-                    }`}
-                  >
-                    <span className="block text-base">{item.score}</span>
-                    <span className="block truncate text-[10px]">{item.label}</span>
-                  </button>
-                ))}
+              <legend className="px-1 text-base font-semibold text-ifab-navy">{config.label}</legend>
+              {/* Descrizione permanente della dimensione: sempre visibile, non un tooltip. */}
+              <p className="mt-1 text-sm text-ifab-text">{config.description}</p>
+              <p className="mt-1 text-xs font-medium text-ifab-blue">{config.polarityNote}</p>
+
+              <div role="group" aria-label={`Punteggio ${config.label}`} className="mt-3 flex flex-col gap-2">
+                {config.criteria.map((item) => {
+                  const isSelected = selected === item.score;
+                  const presentation = getPriorityScorePresentation(dimension, item.score);
+                  return (
+                    <button
+                      key={item.score}
+                      type="button"
+                      onClick={() => setScores((previous) => ({ ...previous, [dimension]: item.score }))}
+                      aria-pressed={isSelected}
+                      className={`flex w-full items-start gap-3 rounded-xl border-2 p-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ifab-blue focus-visible:ring-offset-2 ${
+                        isSelected
+                          ? "border-ifab-blue bg-ifab-blue/5"
+                          : "border-ifab-border bg-white hover:border-ifab-blue/50 hover:bg-ifab-bg-soft"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                          isSelected ? "bg-ifab-blue text-white" : "bg-ifab-bg-soft text-ifab-navy"
+                        }`}
+                      >
+                        {item.score}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ifab-navy">
+                          {item.label}
+                          {isSelected && (
+                            <span role="img" aria-label={presentation.accessibleLabel}>
+                              {presentation.emoji}
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-ifab-text-muted">{item.description}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              {criterion && presentation && (
-                <div className="mt-3 rounded-lg bg-ifab-bg-soft p-3 text-sm">
-                  <p className="font-medium text-ifab-text">
-                    <span role="img" aria-label={presentation.accessibleLabel}>{presentation.emoji}</span>{" "}
-                    {criterion.label} · {selected}/5
-                  </p>
-                  <p className="mt-1 text-xs text-ifab-text-muted">{criterion.description}</p>
+
+              {(config.helperFactors || config.helperByTech) && (
+                <div className="mt-3 rounded-lg bg-ifab-bg-soft p-3 text-xs text-ifab-text-muted">
+                  <p className="font-medium text-ifab-text">{config.helperTitle}</p>
+                  {config.helperFactors && (
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {config.helperFactors.map((factor) => (
+                        <li key={factor}>{factor}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {config.helperByTech?.map((group) => (
+                    <div key={group.label} className="mt-2">
+                      <p className="font-medium text-ifab-text">{group.label}</p>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        {group.factors.map((factor) => (
+                          <li key={factor}>{factor}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               )}
+
               <label htmlFor={`self-rationale-${dimension}`} className="mt-3 block text-xs font-medium text-ifab-text">
                 Perché hai scelto questo punteggio? <span className="font-normal text-ifab-text-muted">(facoltativo)</span>
               </label>
@@ -241,12 +275,6 @@ export default function Step5Priority({
   const useCaseSummary = [block2.values?.problema, block2.values?.soluzione]
     .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
     .join(" ");
-  // Obiettivi già indicati nella scheda Use Case importata all'inizio (stessi id
-  // del Blocco 2, meno "altro"): la profilazione da cui l'assistente riparte.
-  const importedObiettivi = block2.values?.obiettivi;
-  const knownObjectives = (Array.isArray(importedObiettivi) ? importedObiettivi : []).filter(
-    (v): v is StrategicObjectiveKey => STRATEGIC_OBJECTIVE_KEYS.includes(v as StrategicObjectiveKey)
-  );
 
   function applyTechResult(summary: string) {
     setReflectionText((prev) => {
@@ -382,7 +410,7 @@ export default function Step5Priority({
       <section className="rounded-xl border border-violet-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2 font-semibold text-ifab-navy">
-            <Bot size={18} className="text-violet-700" /> Passaggio obbligatorio: assistente per la scelta della tecnologia
+            <Bot size={18} className="text-violet-700" /> Passaggio obbligatorio: Technology Feasibility Assessment
           </span>
           {techReady ? (
             <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
@@ -393,12 +421,11 @@ export default function Step5Priority({
           )}
         </div>
         <p className="mt-1 text-sm text-ifab-text-muted">
-          Prima di scrivere le tue considerazioni devi parlare — a voce o scrivendo — con questo assistente: ti spiega passo passo ambiti di processo e tipi di IA e, in base alle tue risposte, individua la tecnologia più adatta secondo la Matrice di Selezione Tecnologica del workshop.
+          Prima di scrivere le tue considerazioni devi parlare — a voce o scrivendo — con questo assistente: parte dal problema (non dalla tecnologia), ti fa poche domande mirate su dati, processo e autonomia richiesta, e stabilisce quale tecnologia è davvero adatta e quanto lo use case è fattibile.
         </p>
         <div className="mt-4">
           <TechSelectorChat
             useCaseSummary={useCaseSummary || undefined}
-            knownObjectives={knownObjectives}
             onUseResult={applyTechResult}
             onReady={() => setTechReady(true)}
           />

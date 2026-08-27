@@ -1,7 +1,9 @@
 import { PriorityDimension } from "@/lib/types";
 
-export type PriorityCriterion = {
+/** Una delle 5 alternative selezionabili per una dimensione: numero + livello sintetico + descrizione. */
+export type ScoreOption = {
   score: 1 | 2 | 3 | 4 | 5;
+  /** Livello sintetico già completo di nome dimensione (es. "Impatto strategico"): si mostra così com'è, senza concatenazioni. */
   label: string;
   description: string;
 };
@@ -9,52 +11,101 @@ export type PriorityCriterion = {
 export type PriorityLevel = "high" | "medium" | "low";
 export type PriorityQuadrant = "quickWin" | "strategicBet" | "fillIn" | "moneyPit";
 
-export const PRIORITY_DIMENSIONS: Record<
-  PriorityDimension,
-  { label: string; description: string; criteria: PriorityCriterion[] }
-> = {
+/** Driver di complessità dell'Effort, diversi per GenAI e per ML: mostrati come helper secondario, non nella descrizione principale. */
+export type EffortHelperGroup = { label: string; factors: string[] };
+
+export type PriorityDimensionConfig = {
+  label: string;
+  description: string;
+  /** "Più alto è il valore, maggiore è..." — chiarisce la polarità della scala senza ambiguità. */
+  polarityNote: string;
+  criteria: ScoreOption[];
+  /** Fattori secondari da considerare, mostrati come helper text (non tooltip). */
+  helperTitle?: string;
+  helperFactors?: string[];
+  /** Solo per Effort: i fattori cambiano a seconda del tipo di tecnologia. */
+  helperByTech?: EffortHelperGroup[];
+};
+
+export const PRIORITY_DIMENSIONS: Record<PriorityDimension, PriorityDimensionConfig> = {
   impact: {
     label: "Impact",
-    description: "Valore generato per il business.",
+    description:
+      "Valore per il business. Misura quanto lo use case può migliorare o trasformare attività, processi o funzioni dell'organizzazione.",
+    polarityNote: "Più alto è il valore, maggiore è il beneficio generato.",
     criteria: [
-      { score: 1, label: "Minimo", description: "Nice-to-have, beneficio marginale." },
-      { score: 2, label: "Limitato", description: "Beneficio locale a un singolo team o attività." },
-      { score: 3, label: "Moderato", description: "Ottimizza un processo esistente, con beneficio apprezzabile su un'area circoscritta." },
-      { score: 4, label: "Significativo", description: "Migliora un processo importante, con beneficio rilevante su più team o funzioni." },
-      { score: 5, label: "Strategico", description: "Trasforma un processo core, con beneficio ampio e trasversale a tutta l'organizzazione." },
+      { score: 1, label: "Impatto minimo", description: "Nice-to-have, beneficio marginale." },
+      { score: 2, label: "Impatto limitato", description: "Beneficio locale a un singolo team o attività." },
+      { score: 3, label: "Impatto moderato", description: "Ottimizza un processo esistente, con beneficio apprezzabile su un'area circoscritta." },
+      { score: 4, label: "Impatto significativo", description: "Migliora un processo importante, con beneficio rilevante su più team o funzioni." },
+      { score: 5, label: "Impatto strategico", description: "Trasforma un processo core, con beneficio ampio e trasversale a tutta l'organizzazione." },
     ],
+    helperTitle: "Fattori da considerare",
+    helperFactors: ["Frequenza d'uso", "Scalabilità ad altre unità", "Allineamento strategico"],
   },
   effort: {
     label: "Effort",
-    description: "Complessità e tempo richiesti per realizzare l'MVP.",
+    description:
+      "Complessità necessaria per realizzare lo use case, considerando dati, sviluppo, integrazioni, competenze e tempo necessario per arrivare a un MVP.",
+    polarityNote: "Più alto è il valore, maggiore è l'effort.",
     criteria: [
-      { score: 1, label: "Minimo", description: "Dati pronti, nessuna integrazione complessa, MVP in 1–2 settimane." },
-      { score: 2, label: "Basso", description: "Preparazione dati limitata, pattern noto, MVP in 2–4 settimane." },
-      { score: 3, label: "Moderato", description: "Data engineering e validazione, MVP in 4–8 settimane." },
-      { score: 4, label: "Alto", description: "Qualità dati critica o expertise specialistica, MVP in 8–12 settimane." },
-      { score: 5, label: "Massimo", description: "Nuove fonti, ricerca o dipendenze multiple, MVP oltre 12 settimane." },
+      { score: 1, label: "Effort minimo", description: "Dati pronti, soluzione chiara, MVP realizzabile in 1–2 settimane, nessuna integrazione complessa." },
+      { score: 2, label: "Effort basso", description: "Preparazione dati limitata, pattern esistente applicabile, MVP in 2–4 settimane." },
+      { score: 3, label: "Effort moderato", description: "Data engineering necessario, soluzione da validare, MVP in 4–8 settimane." },
+      { score: 4, label: "Effort alto", description: "Problemi di qualità dei dati, domain expertise critico, MVP in 8–12 settimane." },
+      { score: 5, label: "Effort massimo", description: "Nuove sorgenti dati, ricerca necessaria, dipendenze multiple, più di 12 settimane per MVP." },
+    ],
+    helperTitle: "Cosa influenza l'Effort",
+    helperByTech: [
+      {
+        label: "Per GenAI",
+        factors: [
+          "Complessità del prompt engineering",
+          "Quantità di contesto",
+          "Numero di fonti",
+          "Integrazione con workflow esistenti",
+          "Necessità di personalizzazione/fine-tuning",
+        ],
+      },
+      {
+        label: "Per ML",
+        factors: [
+          "Pulizia dei dati",
+          "Feature engineering",
+          "Labeling",
+          "Complessità del modello",
+          "Batch vs real-time",
+          "Explainability",
+        ],
+      },
     ],
   },
   risk: {
     label: "Risk",
-    description: "Rischio dati, tecnico, business, normativo ed etico.",
+    description:
+      "Rischio complessivo associato allo use case: dati, sicurezza, fattibilità tecnica, impatto sul business, compliance, normativa ed aspetti etici.",
+    polarityNote: "Più alto è il valore, maggiore è il rischio.",
     criteria: [
-      { score: 1, label: "Minimo", description: "Nessun dato sensibile, decisioni non critiche e rollback facile." },
-      { score: 2, label: "Basso", description: "Dati interni standard, revisione umana e compliance chiara." },
-      { score: 3, label: "Moderato", description: "Dati sensibili o decisioni semi-automatizzate; serve una review." },
-      { score: 4, label: "Alto", description: "PII/finanziari o decisioni su persone; serve approvazione dedicata." },
-      { score: 5, label: "Massimo", description: "Dati altamente sensibili, decisioni critiche o incertezza normativa." },
+      { score: 1, label: "Rischio minimo", description: "Nessun dato sensibile, nessuna decisione critica, compliance standard, rollback facile." },
+      { score: 2, label: "Rischio basso", description: "Dati interni standard, decisioni riviste da un umano, compliance chiara." },
+      { score: 3, label: "Rischio moderato", description: "Alcuni dati sensibili, decisioni semi-automatizzate, compliance review necessaria." },
+      { score: 4, label: "Rischio alto", description: "Dati PII o finanziari, decisioni automatizzate che impattano persone, approvazione normativa necessaria." },
+      { score: 5, label: "Rischio massimo", description: "Dati altamente sensibili, decisioni critiche automatizzate, incertezza legale o regolatoria." },
     ],
+    helperTitle: "Dimensioni da considerare",
+    helperFactors: ["Rischio dati/privacy/GDPR", "Rischio tecnico", "Rischio business", "Rischio normativo", "Rischio etico"],
   },
   reuse: {
     label: "Reuse",
-    description: "Potenziale di riuso di componenti, pattern e infrastruttura.",
+    description:
+      "Potenziale di riutilizzo della soluzione, dei componenti tecnologici, dei dati, dell'architettura o dei learning per altri use case.",
+    polarityNote: "Più alto è il valore, maggiore è il potenziale di riuso.",
     criteria: [
-      { score: 1, label: "Nullo", description: "Soluzione completamente custom, senza elementi riutilizzabili." },
-      { score: 2, label: "Limitato", description: "Caso specifico con pochi elementi trasferibili." },
-      { score: 3, label: "Moderato", description: "Learning trasferibile a 1–2 casi d'uso simili." },
-      { score: 4, label: "Alto", description: "Applicabile a 3–5 casi d'uso con componenti riutilizzabili." },
-      { score: 5, label: "Massimo", description: "Pattern o infrastruttura per oltre 5 casi d'uso e più unità." },
+      { score: 1, label: "Riutilizzo nullo", description: "Completamente custom, nessun elemento riutilizzabile." },
+      { score: 2, label: "Riutilizzo limitato", description: "Caso specifico, pochi elementi trasferibili." },
+      { score: 3, label: "Riutilizzo moderato", description: "Learning trasferibili, possibile adattamento a 1–2 use case simili." },
+      { score: 4, label: "Riutilizzo alto", description: "Applicabile a 3–5 use case simili, alcuni componenti riutilizzabili." },
+      { score: 5, label: "Riutilizzo massimo", description: "Crea pattern o infrastruttura riutilizzabile per più di 5 use case futuri, applicabile a più unità." },
     ],
   },
 };
@@ -102,5 +153,6 @@ export const PRIORITY_QUADRANTS: Record<
 
 export const HIGH_IMPACT_MIN = 4;
 export const LOW_EFFORT_MAX = 2;
+/** Risk = 5 (rischio massimo) attiva il veto: 1 è rischio minimo, non ha alcun significato di blocco. */
 export const RISK_VETO_SCORE = 5;
 export const ETHICAL_REVIEW_RISK_THRESHOLD = 3;

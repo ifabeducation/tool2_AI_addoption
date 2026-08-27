@@ -10,13 +10,13 @@ import {
   sanitizeInterviewFields,
 } from "@/config/block2Form";
 import {
-  buildTechSelectorSystemPrompt,
-  matchTechnologies,
-  ProcessCategoryKey,
-  remainingTechSelectorGroups,
-  sanitizeTechSelectorClosedGroups,
-  sanitizeTechSelectorFields,
-  StrategicObjectiveKey,
+  buildFeasibilitySystemPrompt,
+  FeasibilityAnswer,
+  FeasibilityAnswerMap,
+  isAssessmentComplete,
+  nextDimension,
+  recommendTechnology,
+  sanitizeFeasibilityAnswer,
 } from "@/config/techSelector";
 import { Block2FieldValue } from "@/lib/types";
 
@@ -27,12 +27,9 @@ type AgentContext = {
   processoContext?: string;
   values?: Record<string, Block2FieldValue>;
   closedGroups?: string[];
-  /** Step 5: assistente di selezione tecnologica, prima della considerazione finale. */
+  /** Step 5: Technology Feasibility Assessment, prima della considerazione finale. */
   useCaseSummary?: string;
-  /** Obiettivi già indicati nella scheda Use Case importata all'inizio: profilazione da riusare, non da rifare. */
-  knownObjectives?: StrategicObjectiveKey[];
-  techValues?: { categoria?: ProcessCategoryKey; obiettivi?: StrategicObjectiveKey[] };
-  techClosedGroups?: string[];
+  feasibilityAnswers?: FeasibilityAnswerMap;
 };
 
 /**
@@ -112,28 +109,32 @@ async function runUseCaseInterview(messages: ChatTurn[], context: AgentContext) 
 }
 
 /**
- * Assistente dello Step 5 che precede la considerazione finale: due domande
- * (categoria di processo, obiettivi strategici) per ricavare, con la Matrice
- * di Selezione Tecnologica del workshop, quale tecnologia AI si adatta
- * meglio al caso. Il confronto tra obiettivi e matrice lo calcola il server
- * (vedi matchTechnologies): il modello spiega e chiede, non inventa né
- * ricalcola il risultato — stesso principio di generatePriorityAdvice.
+ * Technology Feasibility Assessment dello Step 5, prima della considerazione
+ * finale. Il server decide sempre quale dimensione si sta estraendo e quale
+ * proporre subito dopo (i criteri di rilevanza dipendono solo da dimensioni
+ * già risposte in precedenza, mai da quella corrente: per questo si può
+ * calcolare la "prossima" in anticipo, senza chiedere al modello di scegliere
+ * l'ordine). Il modello estrae la risposta e la propone in linguaggio
+ * naturale; la raccomandazione finale la calcola sempre recommendTechnology,
+ * mai il modello — stesso principio di generatePriorityAdvice.
  */
-async function runTechSelectorInterview(messages: ChatTurn[], context: AgentContext) {
-  const techValues = context.techValues ?? {};
-  const closedBefore = sanitizeTechSelectorClosedGroups(context.techClosedGroups);
-  const remaining = remainingTechSelectorGroups(closedBefore);
+async function runFeasibilityAssessment(messages: ChatTurn[], context: AgentContext) {
+  const priorAnswers: FeasibilityAnswerMap = context.feasibilityAnswers ?? {};
+  const current = nextDimension(priorAnswers);
 
-  const priorMatch =
-    techValues.categoria && techValues.obiettivi && techValues.obiettivi.length > 0
-      ? matchTechnologies(techValues.categoria, techValues.obiettivi)
-      : null;
+  // La dimensione dopo quella corrente non dipende dal valore che riceverà
+  // (i criteri di rilevanza guardano solo ad altre dimensioni): si può quindi
+  // calcolare subito, con un segnaposto, e darla al modello come domanda da
+  // porre in questo stesso turno.
+  const next = current
+    ? nextDimension({ ...priorAnswers, [current.key]: { dimension: current.key, value: "__pending__" } })
+    : null;
 
-  const systemPrompt = buildTechSelectorSystemPrompt({
+  const systemPrompt = buildFeasibilitySystemPrompt({
     useCaseSummary: context.useCaseSummary ?? "",
-    knownObjectives: context.knownObjectives,
-    remainingGroups: remaining,
-    match: priorMatch,
+    answers: priorAnswers,
+    current: current ?? next,
+    recommendation: current ? null : recommendTechnology(priorAnswers),
   });
 
   const openai = getOpenAI();
@@ -146,7 +147,7 @@ async function runTechSelectorInterview(messages: ChatTurn[], context: AgentCont
   });
 
   const raw = (response.choices[0]?.message?.content ?? "").trim();
-  let parsed: { reply?: unknown; fields?: unknown; closed?: unknown } = {};
+  let parsed: { reply?: unknown; answer?: unknown } = {};
   try {
     parsed = JSON.parse(raw) as typeof parsed;
   } catch {
@@ -154,24 +155,24 @@ async function runTechSelectorInterview(messages: ChatTurn[], context: AgentCont
   }
 
   const reply = typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : raw;
-  const fields = sanitizeTechSelectorFields(parsed.fields);
-  const closedGroups = sanitizeTechSelectorClosedGroups(parsed.closed, closedBefore);
-  const remainingAfter = remainingTechSelectorGroups(closedGroups);
 
-  const mergedCategoria = fields.categoria ?? techValues.categoria;
-  const mergedObiettivi = fields.obiettivi ?? techValues.obiettivi;
-  const match =
-    mergedCategoria && mergedObiettivi && mergedObiettivi.length > 0
-      ? matchTechnologies(mergedCategoria, mergedObiettivi)
-      : null;
+  let answer: FeasibilityAnswer | null = null;
+  if (current && parsed.answer && typeof parsed.answer === "object") {
+    const raw2 = parsed.answer as { dimension?: unknown; value?: unknown };
+    if (raw2.dimension === current.key) {
+      answer = sanitizeFeasibilityAnswer(current.key, raw2.value);
+    }
+  }
+
+  const mergedAnswers: FeasibilityAnswerMap = answer ? { ...priorAnswers, [answer.dimension]: answer } : priorAnswers;
+  const complete = isAssessmentComplete(mergedAnswers);
 
   return NextResponse.json({
     reply,
-    fields,
-    closedGroups,
-    remaining: remainingAfter.map((g) => g.key),
-    done: remainingAfter.length === 0,
-    match,
+    answer,
+    current: (answer ? nextDimension(mergedAnswers) : current) ?? next,
+    complete,
+    recommendation: complete ? recommendTechnology(mergedAnswers) : null,
     finished: false,
   });
 }
@@ -191,8 +192,8 @@ export async function POST(req: Request) {
       return await runUseCaseInterview(turns, ctx);
     }
 
-    if (subsection === "techSelector") {
-      return await runTechSelectorInterview(turns, ctx);
+    if (subsection === "feasibilityAssessment") {
+      return await runFeasibilityAssessment(turns, ctx);
     }
 
     const systemPrompt = supportPromptFor(subsection, ctx);
