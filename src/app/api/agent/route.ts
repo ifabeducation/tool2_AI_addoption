@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOpenAI, CHAT_MODEL, TECH_SELECTOR_MODEL } from "@/lib/openaiClient";
+import { getOpenAI, CHAT_MODEL, CHATBOT_MODEL } from "@/lib/openaiClient";
 import { buildStep1SystemPrompt, buildStep2SystemPrompt } from "@/config/block1Frizione";
 import {
   BLOCK2_FIELDS,
@@ -11,9 +11,11 @@ import {
 } from "@/config/block2Form";
 import {
   buildFeasibilitySystemPrompt,
+  dimensionAfter,
   FeasibilityAnswer,
   FeasibilityAnswerMap,
   isAssessmentComplete,
+  matchOptionFromText,
   nextDimension,
   recommendTechnology,
   sanitizeFeasibilityAnswer,
@@ -113,33 +115,48 @@ async function runUseCaseInterview(messages: ChatTurn[], context: AgentContext) 
  * finale. Il server decide sempre quale dimensione si sta estraendo e quale
  * proporre subito dopo (i criteri di rilevanza dipendono solo da dimensioni
  * già risposte in precedenza, mai da quella corrente: per questo si può
- * calcolare la "prossima" in anticipo, senza chiedere al modello di scegliere
- * l'ordine). Il modello estrae la risposta e la propone in linguaggio
- * naturale; la raccomandazione finale la calcola sempre recommendTechnology,
- * mai il modello — stesso principio di generatePriorityAdvice.
+ * calcolare la "prossima" in anticipo — vedi dimensionAfter — invece di
+ * lasciare che sia il modello a indovinarla, cosa che lo portava a chiedere
+ * conferme o a ripetersi per non sapere cosa chiedere dopo).
+ *
+ * Quando il testo dell'utente corrisponde esattamente a un'opzione (click su
+ * un pulsante rapido) o a un'espressione di incertezza ("non so" e affini),
+ * matchOptionFromText lo riconosce PRIMA di interpellare il modello: quella
+ * risposta è certa, non serve che il modello la estragga di nuovo (elimina
+ * l'ambiguità che la faceva ripetere) e il modello può concentrarsi solo su
+ * spiegare/aiutare e porre la domanda successiva. La raccomandazione finale
+ * la calcola sempre recommendTechnology, mai il modello — stesso principio
+ * di generatePriorityAdvice.
  */
 async function runFeasibilityAssessment(messages: ChatTurn[], context: AgentContext) {
   const priorAnswers: FeasibilityAnswerMap = context.feasibilityAnswers ?? {};
   const current = nextDimension(priorAnswers);
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const deterministicAnswer = current ? matchOptionFromText(current, lastUserMessage) : null;
 
-  // La dimensione dopo quella corrente non dipende dal valore che riceverà
-  // (i criteri di rilevanza guardano solo ad altre dimensioni): si può quindi
-  // calcolare subito, con un segnaposto, e darla al modello come domanda da
-  // porre in questo stesso turno.
-  const next = current
-    ? nextDimension({ ...priorAnswers, [current.key]: { dimension: current.key, value: "__pending__" } })
-    : null;
+  // Risposte ipotetiche SOLO per decidere cosa mostrare nel prompt di questo
+  // turno: se il testo dell'utente già determina la risposta con certezza,
+  // "toExtract" per il modello è vuoto e si può calcolare subito la domanda
+  // successiva vera; altrimenti resta da estrarre, e "toAsk" è calcolato con
+  // un segnaposto (vedi dimensionAfter) perché non dipende dal suo valore.
+  const answersIfDeterministic: FeasibilityAnswerMap = deterministicAnswer
+    ? { ...priorAnswers, [deterministicAnswer.dimension]: deterministicAnswer }
+    : priorAnswers;
+  const toExtract = deterministicAnswer ? null : current;
+  const toAsk = deterministicAnswer ? nextDimension(answersIfDeterministic) : dimensionAfter(current, priorAnswers);
 
   const systemPrompt = buildFeasibilitySystemPrompt({
     useCaseSummary: context.useCaseSummary ?? "",
     answers: priorAnswers,
-    current: current ?? next,
-    recommendation: current ? null : recommendTechnology(priorAnswers),
+    toExtract,
+    toAsk,
+    alreadyKnown: deterministicAnswer,
+    recommendation: toAsk ? null : recommendTechnology(answersIfDeterministic),
   });
 
   const openai = getOpenAI();
   const response = await openai.chat.completions.create({
-    model: TECH_SELECTOR_MODEL,
+    model: CHATBOT_MODEL,
     messages: [{ role: "system", content: systemPrompt }, ...messages],
     // Niente "temperature" personalizzata: i modelli della famiglia GPT-5
     // accettano nella Chat Completions API solo il valore di default (1).
@@ -156,11 +173,15 @@ async function runFeasibilityAssessment(messages: ChatTurn[], context: AgentCont
 
   const reply = typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : raw;
 
-  let answer: FeasibilityAnswer | null = null;
-  if (current && parsed.answer && typeof parsed.answer === "object") {
+  // La risposta già certa dal testo ha sempre la precedenza: è più affidabile
+  // di qualunque estrazione del modello. Il modello viene interpellato per
+  // estrarla solo quando non era già nota (toExtract non nullo).
+  let answer: FeasibilityAnswer | null = deterministicAnswer;
+  if (!answer && toExtract && parsed.answer && typeof parsed.answer === "object") {
     const raw2 = parsed.answer as { dimension?: unknown; value?: unknown };
-    if (raw2.dimension === current.key) {
-      answer = sanitizeFeasibilityAnswer(current.key, raw2.value);
+    if (raw2.dimension === toExtract.key) {
+      const sanitized = sanitizeFeasibilityAnswer(toExtract.key, raw2.value);
+      answer = sanitized ? { ...sanitized, source: "text" } : null;
     }
   }
 
@@ -170,7 +191,7 @@ async function runFeasibilityAssessment(messages: ChatTurn[], context: AgentCont
   return NextResponse.json({
     reply,
     answer,
-    current: (answer ? nextDimension(mergedAnswers) : current) ?? next,
+    current: complete ? null : (nextDimension(mergedAnswers) ?? toAsk),
     complete,
     recommendation: complete ? recommendTechnology(mergedAnswers) : null,
     finished: false,

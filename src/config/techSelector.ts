@@ -83,6 +83,14 @@ export type FeasibilityAnswer = {
   value: FeasibilityAnswerValue;
   /** true se il partecipante ha scelto "Non lo so / Da verificare" invece di un'opzione. */
   unknown?: boolean;
+  /**
+   * "quickReply": il testo del messaggio corrispondeva esattamente a
+   * un'opzione (o a "non lo so"), riconosciuto dal codice in modo
+   * deterministico, senza bisogno del modello. "text": estratta dal
+   * modello da una risposta libera (scritta o dettata) — distingue
+   * un'informazione dichiarata esplicitamente da una interpretata.
+   */
+  source?: "quickReply" | "text";
 };
 
 export type FeasibilityAnswerMap = Partial<Record<FeasibilityDimensionKey, FeasibilityAnswer>>;
@@ -98,6 +106,69 @@ function valueIncludes(answer: FeasibilityAnswer | undefined, value: string): bo
 
 function valueIsAny(answer: FeasibilityAnswer | undefined, values: string[]): boolean {
   return values.some((v) => valueIncludes(answer, v));
+}
+
+// --- Riconoscimento semantico dell'incertezza -------------------------------
+// Generico e indipendente dalle domande: funziona su qualunque dimensione,
+// anche se in futuro cambiano titoli e opzioni (nessun testo hardcoded per
+// una domanda specifica).
+
+const UNCERTAIN_PATTERNS: RegExp[] = [
+  /non\s+(lo\s+)?so\b/i,
+  /non\s+saprei/i,
+  /non\s+(ne\s+)?sono\s+sicur[oa]/i,
+  /non\s+sono\s+cert[oa]/i,
+  /^boh\.?$/i,
+  /non\s+è\s+chiaro/i,
+  /difficile\s+da\s+dire/i,
+  /non\s+ho\s+idea/i,
+  /^mah\b/i,
+  /da\s+verificare/i,
+];
+
+/** Riconosce espressioni di incertezza equivalenti a "non lo so", in italiano, a prescindere dalla domanda posta. */
+export function isUncertainText(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return UNCERTAIN_PATTERNS.some((re) => re.test(t));
+}
+
+/**
+ * Riconoscimento deterministico della risposta a partire dal testo del
+ * messaggio: se corrisponde esattamente (senza distinzione di maiuscole) a
+ * un'opzione della dimensione, o a un'espressione di incertezza, la risposta
+ * è certa e non serve affidarsi all'estrazione del modello — elimina
+ * l'ambiguità che fa ripetere la domanda quando il modello non riesce a
+ * estrarla, e permette di dirlo esplicitamente al prompt. Ritorna null se il
+ * testo è libero e va interpretato dal modello (nessun match esatto).
+ */
+export function matchOptionFromText(dimension: AssessmentDimension, text: string): FeasibilityAnswer | null {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+
+  // Il corto circuito su "non lo so" scatta solo per messaggi brevi, cioè
+  // quasi interamente quell'espressione (click sul pulsante, o poche
+  // parole dettate/scritte): una frase lunga che la contiene di sfuggita
+  // ("vorrei automatizzare X ma non so se Y") ha comunque contenuto utile
+  // e va interpretata dal modello, non scartata come pura incertezza.
+  if (t === UNKNOWN_OPTION.label.toLowerCase() || (t.length <= 40 && isUncertainText(t))) {
+    return { dimension: dimension.key, value: UNKNOWN_VALUE, unknown: true, source: "quickReply" };
+  }
+
+  if (dimension.multiple) {
+    const parts = t.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    const matched = dimension.options.filter((o) => parts.includes(o.label.toLowerCase())).map((o) => o.value);
+    // Match solo se OGNI parte corrisponde a un'opzione nota: altrimenti è
+    // testo libero parziale, meglio lasciarlo interpretare al modello.
+    if (matched.length === parts.length) {
+      return { dimension: dimension.key, value: matched, source: "quickReply" };
+    }
+    return null;
+  }
+
+  const exact = dimension.options.find((o) => o.label.toLowerCase() === t);
+  return exact ? { dimension: dimension.key, value: exact.value, source: "quickReply" } : null;
 }
 
 // --- Catalogo delle dimensioni ----------------------------------------------
@@ -248,6 +319,20 @@ export function nextDimension(answers: FeasibilityAnswerMap): AssessmentDimensio
   if (Object.keys(answers).length >= MAX_QUESTIONS) return null;
   const applicable = applicableDimensions(answers).sort((a, b) => a.priority - b.priority);
   return applicable[0] ?? null;
+}
+
+/**
+ * La dimensione che verrebbe chiesta subito dopo `dim`, ASSUMENDO che venga
+ * risposta in un modo qualunque: i criteri di rilevanza delle altre
+ * dimensioni non dipendono mai dal valore di `dim` stessa (solo da altre
+ * dimensioni già risposte in precedenza), quindi si può calcolare senza
+ * ancora conoscere la risposta — ed è proprio questo che permette al
+ * modello di sapere, nello stesso turno in cui estrae la risposta corrente,
+ * quale sarà la prossima domanda da fare.
+ */
+export function dimensionAfter(dim: AssessmentDimension | null, answers: FeasibilityAnswerMap): AssessmentDimension | null {
+  if (!dim) return null;
+  return nextDimension({ ...answers, [dim.key]: { dimension: dim.key, value: "__pending__" } });
 }
 
 /** Stima dinamica del totale domande per l'indicatore di avanzamento: non è un numero fisso, si aggiorna col ramo emerso. */
@@ -460,6 +545,18 @@ function unknownCount(answers: FeasibilityAnswerMap): number {
 }
 
 /**
+ * AI Agent è definito da PIÙ requisiti insieme (obiettivo perseguito,
+ * pianificazione multi-step, scelta dinamica, uso di tool/API — vedi
+ * TECHNOLOGY_FAMILIES.aiAgent.whenToUse), non da uno solo: un singolo
+ * segnale positivo (es. il solo "output multi-step") non basta a
+ * qualificarla, altrimenti basterebbe che lo use case contenga più di
+ * un'attività. Le altre famiglie non hanno questo vincolo esplicito.
+ */
+const MIN_POSITIVE_SIGNALS: Partial<Record<TechnologyFamilyKey, number>> = {
+  aiAgent: 2,
+};
+
+/**
  * Calcola la raccomandazione dalle risposte raccolte. Puramente deterministico:
  * non è mai il modello a scegliere la tecnologia, solo a spiegarla (vedi
  * buildFeasibilitySystemPrompt). Non sceglie MAI GenAI/Agent per default: sono
@@ -471,12 +568,16 @@ export function recommendTechnology(answers: FeasibilityAnswerMap): TechnologyRe
   const scored = TECHNOLOGY_FAMILY_KEYS.map((key) => {
     const rules = SIGNALS[key];
     const fired = rules.filter((r) => r.check(answers));
-    const score = fired.reduce((sum, r) => sum + r.points, 0);
-    const reasons = fired
-      .filter((r) => r.points > 0 && r.reason)
-      .sort((a, b) => b.points - a.points)
-      .slice(0, 4)
-      .map((r) => r.reason);
+    const positiveCount = fired.filter((r) => r.points > 0).length;
+    const belowMinimum = positiveCount < (MIN_POSITIVE_SIGNALS[key] ?? 1);
+    const score = belowMinimum ? 0 : fired.reduce((sum, r) => sum + r.points, 0);
+    const reasons = belowMinimum
+      ? []
+      : fired
+          .filter((r) => r.points > 0 && r.reason)
+          .sort((a, b) => b.points - a.points)
+          .slice(0, 4)
+          .map((r) => r.reason);
     return { key, score, reasons };
   }).sort((a, b) => b.score - a.score);
 
@@ -546,17 +647,33 @@ function answersSummaryText(answers: FeasibilityAnswerMap): string {
     .join("\n");
 }
 
+function optionsBlock(dimension: AssessmentDimension): string {
+  const opts = dimension.options.map((o) => `"${o.label}" = ${o.value}`).join(" · ");
+  const multi = dimension.multiple ? ' (il partecipante può scegliere più opzioni, elencale tutte in "value" come array)' : "";
+  return `${opts} · "${UNKNOWN_OPTION.label}" = ${UNKNOWN_VALUE}${multi}`;
+}
+
 /**
  * System prompt del facilitatore. Il modello: spiega, fa UNA domanda alla
- * volta sulla dimensione indicata dal server (non decide lui l'ordine), ed
- * estrae la risposta in JSON. Non calcola né sceglie la tecnologia: quando
- * l'assessment è completo il risultato arriva già calcolato da
- * recommendTechnology e il modello lo commenta soltanto.
+ * volta, ed estrae la risposta in JSON — ma SOLO quando serve davvero:
+ * `toExtract` e `toAsk` sono calcolati dal server (mai dal modello), quindi
+ * lo stesso turno può sia riconoscere che una risposta è già certa
+ * (`alreadyKnown`, niente da estrarre) sia sapere subito quale sarà
+ * l'argomento successivo da chiedere — senza questo, il modello non aveva
+ * modo di sapere "cosa chiedere dopo" ed era portato a confermare o
+ * ripetere. Non calcola né sceglie la tecnologia: quando l'assessment è
+ * completo il risultato arriva già calcolato da recommendTechnology e il
+ * modello lo commenta soltanto.
  */
 export function buildFeasibilitySystemPrompt(ctx: {
   useCaseSummary?: string;
   answers: FeasibilityAnswerMap;
-  current: AssessmentDimension | null;
+  /** Dimensione la cui risposta va ancora estratta da questo messaggio; null se già nota (vedi alreadyKnown) o se non resta nulla da chiedere. */
+  toExtract: AssessmentDimension | null;
+  /** Dimensione da chiedere in "reply" in questo turno, una volta gestito toExtract; null se l'assessment è concluso. */
+  toAsk: AssessmentDimension | null;
+  /** Risposta a toExtract già riconosciuta con certezza dal codice (opzione cliccata, o "non lo so" testuale): il modello non deve estrarla di nuovo, solo reagire di conseguenza. */
+  alreadyKnown?: FeasibilityAnswer | null;
   recommendation: TechnologyRecommendation | null;
 }): string {
   const contesto = ctx.useCaseSummary
@@ -565,9 +682,19 @@ export function buildFeasibilitySystemPrompt(ctx: {
 
   const raccolte = answersSummaryText(ctx.answers);
 
-  const prossima = ctx.current
-    ? `[${ctx.current.key}] ${ctx.current.title}\nDomanda: ${ctx.current.question}\nOpzioni rapide (etichetta = valore da usare in "value"): ${ctx.current.options.map((o) => `"${o.label}" = ${o.value}`).join(" · ")} · "${UNKNOWN_OPTION.label}" = ${UNKNOWN_VALUE}${ctx.current.multiple ? " (il partecipante può scegliere più opzioni, elencale tutte in \"value\" come array)" : ""}`
-    : "Nessuna: l'assessment ha raccolto abbastanza informazioni. Il risultato è qui sotto: commentalo in 2-3 frasi semplici, spiegando perché quella tecnologia emerge dalle risposte date, e rispondi a eventuali domande del partecipante.";
+  const notaGiaNota = ctx.alreadyKnown
+    ? ctx.alreadyKnown.unknown
+      ? `\n**IMPORTANTE — IL PARTECIPANTE NON SA RISPONDERE**\nHa appena indicato che non sa rispondere alla domanda su "${dimensionByKey(ctx.alreadyKnown.dimension)?.title ?? ctx.alreadyKnown.dimension}". È un'informazione valida, non un errore: NON ripetere la stessa domanda, NON riproporre le stesse alternative tali e quali. Invece, in "reply":\n1. Se da "RISPOSTE GIÀ RACCOLTE" o dal resto della conversazione puoi già dedurre una risposta plausibile, proponila esplicitamente con la tua motivazione (es. "Da quello che hai descritto mi sembra di capire che..., ti direi quindi ...") e lascia che il partecipante confermi o corregga.\n2. Se non hai abbastanza elementi, fai UNA domanda di chiarimento diversa da quella già fatta: più semplice, concreta, con un esempio pratico che aiuti davvero a distinguere le alternative — non un'altra formulazione della stessa domanda.\n`
+      : `\n**Il partecipante ha già risposto in modo chiaro**: "${answerLabel(ctx.alreadyKnown)}". È già stato registrato automaticamente: NON estrarlo di nuovo, NON chiedere conferma (non è ambiguo né in contraddizione con altro). Riconoscilo con al massimo una breve frase, poi vai dritto alla domanda successiva.\n`
+    : "";
+
+  const daEstrarre = ctx.toExtract
+    ? `Devi ancora ricavare la risposta a: [${ctx.toExtract.key}] ${ctx.toExtract.title} — "${ctx.toExtract.question}"\nOpzioni (etichetta = valore da usare in "value"): ${optionsBlock(ctx.toExtract)}`
+    : "Nessuna: la domanda corrente è già stata gestita (vedi sopra).";
+
+  const daChiedere = ctx.toAsk
+    ? `Nella tua "reply" chiedi QUESTO, con parole tue e un esempio se non è ovvio: [${ctx.toAsk.key}] ${ctx.toAsk.title} — "${ctx.toAsk.question}"\n(Non serve che tu elenchi le opzioni in "reply": sono già mostrate come pulsanti nell'interfaccia, tu introduci solo la domanda.)`
+    : "Nessuna: non resta altro da chiedere. Il risultato è qui sotto: commentalo in 2-3 frasi semplici, spiegando perché quella tecnologia emerge dalle risposte date, e rispondi a eventuali domande del partecipante.";
 
   const risultato = ctx.recommendation
     ? `\n**RACCOMANDAZIONE GIÀ CALCOLATA (non ricalcolarla, non contraddirla, non sceglierne un'altra)**\nTecnologia principale: ${ctx.recommendation.primary.label} (confidenza ${ctx.recommendation.primary.confidence})\n${ctx.recommendation.alternative ? `Alternativa considerata: ${ctx.recommendation.alternative.label}\n` : ""}`
@@ -585,33 +712,40 @@ ${technologyCatalogText()}
 
 **RISPOSTE GIÀ RACCOLTE IN QUESTA CONVERSAZIONE**
 ${raccolte}
+${notaGiaNota}
+**COSA ESTRARRE DA QUESTO MESSAGGIO**
+${daEstrarre}
 
-**PROSSIMO PASSO**
-${prossima}
+**COSA CHIEDERE SUBITO DOPO, NELLA STESSA RISPOSTA**
+${daChiedere}
 ${risultato}
 
 **COME CONDUCI**
-- Una sola domanda alla volta, sempre e solo quella indicata sopra in "PROSSIMO PASSO": non anticipare le successive, non tornare su argomenti già coperti.
-- Prima di chiedere, in 1 riga spiega perché te lo stai chiedendo se non è ovvio, con parole semplici e senza gergo tecnico; se usi un termine tecnico spiegalo brevemente.
-- Presenta sempre le opzioni rapide elencate, in modo che il partecipante possa scegliere velocemente; ricorda che può anche rispondere liberamente (a voce o scrivendo) o dire che non lo sa.
-- Se manca un'informazione indispensabile per capire la risposta, fai una sola domanda di chiarimento mirata, poi accontentati di quello che ottieni.
+- Una sola domanda alla volta: quella in "COSA CHIEDERE SUBITO DOPO". Non anticipare altre domande, non tornare su argomenti già coperti in "RISPOSTE GIÀ RACCOLTE".
+- Se in "COSA ESTRARRE DA QUESTO MESSAGGIO" c'è una dimensione da estrarre e il messaggio del partecipante è davvero troppo ambiguo per ricavarla con sicurezza (caso diverso da "non lo so", che va gestito come sopra), NON procedere comunque a "COSA CHIEDERE SUBITO DOPO": fai invece una domanda di chiarimento mirata su quella stessa dimensione, altrimenti quell'informazione andrebbe persa.
+- Non ripetere mai una domanda a cui il partecipante ha già risposto chiaramente, e non chiederne conferma — salvo che la nuova risposta contraddica esplicitamente una precedente, sia realmente ambigua, o la conferma sia indispensabile per una decisione importante del flusso (es. subito prima di dare il risultato finale).
+- Prima di una domanda nuova, se non è ovvia spiega in 1 riga perché te la stai chiedendo, con parole semplici e senza gergo tecnico; se usi un termine tecnico spiegalo brevemente.
 - Non fingere di avere informazioni che il partecipante non ha dato: se qualcosa non è chiaro, dillo esplicitamente invece di presumerlo.
+- Se il partecipante esprime incertezza con parole diverse da "non lo so" (es. "boh", "non ne sono sicuro", "difficile da dire", "mah", "non saprei"), trattalo esattamente come "non lo so": vedi sopra "IL PARTECIPANTE NON SA RISPONDERE" se presente, altrimenti applica lo stesso principio.
 - Quando il risultato è già calcolato, presentalo con le sue motivazioni in modo semplice, e se manca qualcosa di indispensabile per confermarlo dillo chiaramente (es. "la tecnologia più probabile è X, ma prima di confermarla va verificato Y").
 - Resta sempre nel perimetro di questo assessment: fattibilità tecnologica del caso. Se il partecipante chiede altro, rispondi in una riga che qui trattate solo questo e riporta la conversazione alla domanda aperta.
+- Nessun testo superfluo tra una domanda e l'altra: conversazione naturale, breve, progressiva.
 
 **FORMATO DELLA RISPOSTA**
 Rispondi SEMPRE e SOLO con un oggetto JSON valido con queste chiavi:
 {
   "reply": "il messaggio per il partecipante, in italiano, con il tu, massimo 3-4 righe: breve, semplice, una sola domanda",
-  "answer": { "dimension": "chiave-dimensione-corrente", "value": "valore-opzione" | ["valore1","valore2"], "unknown": true|false }
+  "answer": { "dimension": "chiave-dimensione", "value": "valore-opzione" | ["valore1","valore2"], "unknown": true|false }
 }
-- Valorizza "answer" SOLO quando riesci a ricavare con sicurezza la risposta del partecipante alla dimensione corrente indicata in "PROSSIMO PASSO" (dal testo libero, dalla voce o da un'opzione scelta); altrimenti ometti del tutto la chiave "answer" e richiedi di nuovo la stessa domanda con parole diverse.
-- "value" deve usare ESATTAMENTE uno dei valori ammessi per quella dimensione (non le etichette): ${ASSESSMENT_DIMENSIONS.map((d) => `${d.key}=[${d.options.map((o) => o.value).join(",")}]`).join(" · ")}.
+- Valorizza "answer" SOLO se in "COSA ESTRARRE DA QUESTO MESSAGGIO" c'è una dimensione da estrarre E riesci a ricavarla con sicurezza da questo messaggio; altrimenti ometti del tutto la chiave "answer" (non inventare, non forzare un valore incerto).
+- "value" deve usare ESATTAMENTE uno dei valori ammessi elencati sopra per quella dimensione (non le etichette).
 - Se il partecipante non sa rispondere, imposta "unknown": true e "value": "${UNKNOWN_VALUE}".
+- Non usare mai in "answer" una dimensione diversa da quella indicata in "COSA ESTRARRE DA QUESTO MESSAGGIO".
 - Nessun testo fuori dal JSON, nessun markdown.
 
 **REGOLE ASSOLUTE**
 - Italiano, "tu", tono amichevole e concreto, parole semplici: mai gergo tecnico non spiegato (niente "vuoi un LLM?", "supervised o unsupervised?", "quale modello?").
 - Una sola domanda per turno.
+- Non inventare opzioni diverse da quelle elencate qui sopra, e non elencarle di nuovo per esteso in "reply": sono già selezionabili nell'interfaccia.
 - Non decidere tu la tecnologia consigliata: la calcola il sistema, tu la commenti.`;
 }
