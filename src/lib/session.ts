@@ -67,7 +67,6 @@ export async function createSession(facilitatorName: string): Promise<SessionMet
   };
 
   await redis.set(keyMeta(code), meta, { ex: SESSION_TTL_SECONDS });
-  await redis.set(keyParticipants(code), [], { ex: SESSION_TTL_SECONDS });
   await addToSessionIndex(code);
   return meta;
 }
@@ -161,10 +160,26 @@ export async function setUnlockedStep(
   return meta;
 }
 
+/**
+ * Un partecipante per campo dell'hash (chiave = participantId), non un unico
+ * array JSON: aggiungere un nuovo partecipante è un HSET su un campo proprio,
+ * atomico e indipendente dagli altri. Con l'array unico, più "join" arrivati
+ * insieme (il caso normale a inizio workshop, quando tutti si iscrivono nello
+ * stesso momento dallo stesso codice) leggevano la stessa lista, la
+ * modificavano ciascuno per conto proprio e riscrivevano l'intero array:
+ * l'ultima scrittura vinceva e cancellava in silenzio i partecipanti aggiunti
+ * nel frattempo dalle altre richieste. Il rischio residuo (due persone che si
+ * iscrivono con lo stesso nome nello stesso istante) è molto più tollerabile:
+ * al peggio una voce duplicata, non un partecipante sparito.
+ */
 export async function getParticipants(code: string): Promise<Participant[]> {
   const redis = getRedis();
-  const list = await redis.get<Participant[]>(keyParticipants(code));
-  return list ?? [];
+  const map = await redis.hgetall<Record<string, Participant>>(keyParticipants(code));
+  return map ? Object.values(map) : [];
+}
+
+async function touchTtl(code: string): Promise<void> {
+  await getRedis().expire(keyParticipants(code), SESSION_TTL_SECONDS);
 }
 
 /**
@@ -186,7 +201,8 @@ export async function joinOrResumeParticipant(
 
   if (existing) {
     existing.lastSeenAt = now;
-    await redis.set(keyParticipants(code), participants, { ex: SESSION_TTL_SECONDS });
+    await redis.hset(keyParticipants(code), { [existing.participantId]: existing });
+    await touchTtl(code);
     return { participant: existing, isNew: false };
   }
 
@@ -197,8 +213,8 @@ export async function joinOrResumeParticipant(
     joinedAt: now,
     lastSeenAt: now,
   };
-  participants.push(participant);
-  await redis.set(keyParticipants(code), participants, { ex: SESSION_TTL_SECONDS });
+  await redis.hset(keyParticipants(code), { [participant.participantId]: participant });
+  await touchTtl(code);
   return { participant, isNew: true };
 }
 
@@ -213,22 +229,22 @@ export async function resumeParticipantById(
   participantId: string
 ): Promise<Participant | null> {
   const redis = getRedis();
-  const participants = await getParticipants(code);
-  const participant = participants.find((p) => p.participantId === participantId);
+  const participant = await redis.hget<Participant>(keyParticipants(code), participantId);
   if (!participant) return null;
 
   participant.lastSeenAt = Date.now();
-  await redis.set(keyParticipants(code), participants, { ex: SESSION_TTL_SECONDS });
+  await redis.hset(keyParticipants(code), { [participantId]: participant });
+  await touchTtl(code);
   return participant;
 }
 
 export async function touchParticipant(code: string, participantId: string): Promise<void> {
   const redis = getRedis();
-  const participants = await getParticipants(code);
-  const p = participants.find((x) => x.participantId === participantId);
+  const p = await redis.hget<Participant>(keyParticipants(code), participantId);
   if (!p) return;
   p.lastSeenAt = Date.now();
-  await redis.set(keyParticipants(code), participants, { ex: SESSION_TTL_SECONDS });
+  await redis.hset(keyParticipants(code), { [participantId]: p });
+  await touchTtl(code);
 }
 
 export async function getSubmission(code: string, participantId: string): Promise<Submission> {
