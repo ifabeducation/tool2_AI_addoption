@@ -5,6 +5,7 @@ import { AlertTriangle, Bot, CheckCircle2, FileCheck2, FileDown, Lock, LoaderCir
 import { PRIORITY_DIMENSIONS, PRIORITY_LEVELS } from "@/config/priorityFramework";
 import { submitPriorityEvaluation, submitPriorityReflection } from "@/lib/clientApi";
 import TechSelectorChat from "./TechSelectorChat";
+import { MicButton, useDictation } from "./VoiceInput";
 import { downloadPriorityPdf } from "@/lib/priorityPdf";
 import { arePriorityScores, evaluatePriority, getPriorityScorePresentation } from "@/lib/priorityScoring";
 import {
@@ -243,6 +244,12 @@ export default function Step5Priority({
   // resta sbloccato per sempre una volta raggiunto, e per chi aveva già inviato la
   // considerazione prima che questo passaggio esistesse (non li si blocca a ritroso).
   const [techReady, setTechReady] = useState(Boolean(reflection));
+  // Dettatura vocale delle considerazioni: stesso microfono usato altrove
+  // nell'app (Step 4, assistente tecnologia). L'hook va chiamato qui, prima
+  // di qualunque return anticipato, per rispettare le regole degli hook.
+  const reflectionDictation = useDictation((text) => {
+    setReflectionText((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text).slice(0, 3000));
+  });
 
   if (!block2?.values || Object.keys(block2.values).length === 0) {
     return (
@@ -302,6 +309,7 @@ export default function Step5Priority({
 
   async function handleReflectionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    reflectionDictation.stop();
     setRequestingAdvice(true);
     setError(null);
     setFeedback(null);
@@ -446,18 +454,29 @@ export default function Step5Priority({
           <label htmlFor="priority-reflection" className="mt-4 block text-sm font-medium text-ifab-text">
             Le tue considerazioni
           </label>
-          <textarea
-            id="priority-reflection"
-            value={reflectionText}
-            onChange={(event) => setReflectionText(event.target.value.slice(0, 3000))}
-            rows={5}
-            minLength={10}
-            maxLength={3000}
-            required
-            disabled={requestingAdvice}
-            placeholder="Per esempio: condivido il punteggio di impatto, ma prima dell'MVP dobbiamo verificare..."
-            className="mt-2 w-full rounded-lg border border-ifab-border bg-white px-3 py-2 text-sm text-ifab-text outline-none transition focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20 disabled:opacity-60"
-          />
+          <div className="mt-2 flex items-start gap-2">
+            <textarea
+              id="priority-reflection"
+              value={reflectionText}
+              onChange={(event) => setReflectionText(event.target.value.slice(0, 3000))}
+              rows={5}
+              minLength={10}
+              maxLength={3000}
+              required
+              disabled={requestingAdvice}
+              placeholder={
+                reflectionDictation.listening
+                  ? "Sto ascoltando: parla pure..."
+                  : "Per esempio: condivido il punteggio di impatto, ma prima dell'MVP dobbiamo verificare..."
+              }
+              className="w-full rounded-lg border border-ifab-border bg-white px-3 py-2 text-sm text-ifab-text outline-none transition focus:border-ifab-blue focus:ring-2 focus:ring-ifab-blue/20 disabled:opacity-60"
+            />
+            <MicButton dictation={reflectionDictation} disabled={requestingAdvice} />
+          </div>
+          {reflectionDictation.interim && (
+            <p className="mt-1.5 px-1 text-xs italic text-ifab-text-muted">{reflectionDictation.interim}</p>
+          )}
+          {reflectionDictation.error && <p className="mt-1.5 px-1 text-xs text-amber-700">{reflectionDictation.error}</p>}
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-ifab-text-muted">{reflectionText.length}/3000 caratteri</span>
             <button
