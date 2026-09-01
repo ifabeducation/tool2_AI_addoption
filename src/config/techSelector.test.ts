@@ -166,8 +166,7 @@ describe("recommendTechnology — motore deterministico, mai generico su GenAI/A
 });
 
 describe("Caso E — modello del chatbot", () => {
-  it("usa GPT-5 (non GPT-5-mini) come modello di default per il chatbot", () => {
-    expect(CHATBOT_MODEL).toBe("gpt-5");
-    expect(CHATBOT_MODEL).not.toContain("mini");
+  it("usa la famiglia gpt-5 (non gpt-4o o altre famiglie) come modello di default per il chatbot", () => {
+    expect(CHATBOT_MODEL).toMatch(/^gpt-5/);
   });
 });

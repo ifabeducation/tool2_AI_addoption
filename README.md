@@ -55,7 +55,7 @@ npm run dev
 
 Apri `http://localhost:3000`.
 
-Il modello del chatbot (Technology Feasibility Assessment) è `gpt-5` di default; per usarne uno diverso senza toccare il codice imposta la variabile d'ambiente opzionale `CHATBOT_MODEL` (es. `CHATBOT_MODEL=gpt-5-mini`).
+Il modello del chatbot (Technology Feasibility Assessment) è `gpt-5.4-mini` di default; per usarne uno diverso senza toccare il codice imposta la variabile d'ambiente opzionale `CHATBOT_MODEL` (es. `CHATBOT_MODEL=gpt-5`).
 
 `npm test` esegue i test (Vitest) sulla logica pura del chatbot: riconoscimento di "non lo so", percorso adattivo delle domande, motore di raccomandazione.
 
